@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>テリトリー率 v0.1</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    body { font-family: sans-serif; margin: 0; padding: 10px; display: flex; flex-direction: column; align-items: center; background: #f0f0f0; touch-action: manipulation; }
+    h1 { font-size: 1.2rem; margin: 5px 0 15px; }
+    .camera-container { position: relative; width: 100%; max-width: 400px; aspect-ratio: 4/3; background: #000; border: 1px solid #333; }
+    video { width: 100%; height: 100%; object-fit: cover; }
+    canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+    .control-panel { width: 100%; max-width: 400px; margin-top: 15px; display: flex; flex-direction: column; gap: 15px; }
+    .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    button { padding: 12px; font-size: 1rem; flex: 1; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; background: #e0e0e0; }
+    .btn-primary { background: #1976d2; color: white; }
+    .btn-play { background: #2e7d32; color: white; font-size: 1.2rem; }
+    .btn-pause { background: #d32f2f; color: white; font-size: 1.2rem; }
+    .status-badge { padding: 5px 10px; border-radius: 15px; font-size: 0.9rem; font-weight: bold; }
+    .status-un { background: #ffcc00; color: #333; }
+    .status-done { background: #4caf50; color: white; }
+    .stats-container { display: flex; justify-content: space-between; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    .stat-box { text-align: center; width: 45%; }
+    .stat-title { font-size: 0.9rem; color: #666; }
+    .stat-value { font-size: 2rem; font-weight: bold; color: #1976d2; margin-top: 5px; }
+    .reset-row { display: flex; justify-content: flex-end; }
+    .btn-reset { flex: 0 0 auto; padding: 8px 20px; background: #757575; color: white; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+
+  <h1>テリトリー率 v0.1</h1>
+
+  <!-- さつえい動画エリア -->
+  <div class="camera-container">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="arCanvas"></canvas>
+  </div>
+
+  <div class="control-panel">
+    <!-- 基準角設定 -->
+    <div class="row">
+      <button id="btnSetBase" class="btn-primary">基準角設定</button>
+      <span id="statusBadge" class="status-badge status-un">未</span>
+    </div>
+
+    <!-- 実行 / 一時停止 -->
+    <div class="row">
+      <button id="btnPlay" class="btn-play">▷ 実行</button>
+      <button id="btnPause" class="btn-pause">|| 一時停止</button>
+    </div>
+
+    <!-- 左サイド / 右サイド テリトリー率 -->
+    <div class="stats-container">
+      <div class="stat-box">
+        <div class="stat-title">左サイド</div>
+        <div id="leftRate" class="stat-value">0%</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-title">右サイド</div>
+        <div id="rightRate" class="stat-value">0%</div>
+      </div>
+    </div>
+
+    <!-- リセットボタン -->
+    <div class="reset-row">
+      <button id="btnReset" class="btn-reset">リセット</button>
+    </div>
+  </div>
+
+  <script>
+    // Service Workerの登録
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js');
+      });
+    }
+
+    // 変数定義
+    let currentAlpha = null;
+    let baseAngle = null;
+    let leftCount = 0;
+    let rightCount = 0;
+    let isRunning = false;
+    let timer = null;
+
+    // DOM要素
+    const video = document.getElementById('video');
+    const arCanvas = document.getElementById('arCanvas');
+    const ctx = arCanvas.getContext('2d');
+    const btnSetBase = document.getElementById('btnSetBase');
+    const statusBadge = document.getElementById('statusBadge');
+    const btnPlay = document.getElementById('btnPlay');
+    const btnPause = document.getElementById('btnPause');
+    const btnReset = document.getElementById('btnReset');
+    const textLeft = document.getElementById('leftRate');
+    const textRight = document.getElementById('rightRate');
+
+    // カメラ起動
+    async function initCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' }
+        });
+        video.srcObject = stream;
+        video.onloadedmetadata = () => {
+          arCanvas.width = video.clientWidth;
+          arCanvas.height = video.clientHeight;
+        };
+      } catch (err) {
+        alert("カメラの起動に失敗しました: " + err.message);
+      }
+    }
+    initCamera();
+
+    // センサー値の取得
+    window.addEventListener('deviceorientation', (e) => {
+      // iOSの場合はwebkitCompassHeading、それ以外はalphaを使用
+      let alpha = e.webkitCompassHeading !== undefined ? e.webkitCompassHeading : e.alpha;
+      if (alpha !== null) {
+        // webkitCompassHeadingは北が0度。alphaは起動時が基準。どちらも相対計算可能。
+        currentAlpha = alpha;
+        drawAR();
+      }
+    });
+
+    // 基準角の設定（iOSの許可リクエスト含む）
+    btnSetBase.addEventListener('click', () => {
+      if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission()
+          .then(permissionState => {
+            if (permissionState === 'granted') {
+              setBaseAngle();
+            } else {
+              alert("センサーへのアクセスが拒否されました");
+            }
+          })
+          .catch(console.error);
+      } else {
+        setBaseAngle();
+      }
+    });
+
+    function setBaseAngle() {
+      if (currentAlpha !== null) {
+        baseAngle = currentAlpha;
+        statusBadge.textContent = "済";
+        statusBadge.className = "status-badge status-done";
+      } else {
+        alert("センサーから方位を取得できていません");
+      }
+    }
+
+    // AR表示（基準角を示す赤い縦線）
+    function drawAR() {
+      ctx.clearRect(0, 0, arCanvas.width, arCanvas.height);
+      if (baseAngle === null || currentAlpha === null) return;
+
+      // 角度差を計算（-180 〜 +180度）
+      let diff = currentAlpha - baseAngle;
+      if (diff > 180) diff -= 360;
+      if (diff < -180) diff += 360;
+
+      // 視野角を約60度と仮定し、画面中心からのズレをピクセル換算
+      const pxPerDegree = arCanvas.width / 60;
+      const lineX = (arCanvas.width / 2) - (diff * pxPerDegree);
+
+      if (lineX >= 0 && lineX <= arCanvas.width) {
+        ctx.beginPath();
+        ctx.moveTo(lineX, 0);
+        ctx.lineTo(lineX, arCanvas.height);
+        ctx.strokeStyle = 'red';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
+    }
+
+    // 実行ボタン
+    btnPlay.addEventListener('click', () => {
+      if (baseAngle === null) {
+        alert("先に基準角を設定してください");
+        return;
+      }
+      if (!isRunning) {
+        isRunning = true;
+        // 1秒ごとに判定
+        timer = setInterval(calculateTerritory, 1000);
+      }
+    });
+
+    // 一時停止ボタン
+    btnPause.addEventListener('click', () => {
+      isRunning = false;
+      clearInterval(timer);
+    });
+
+    // テリトリー率の計算
+    function calculateTerritory() {
+      if (currentAlpha === null) return;
+
+      let diff = currentAlpha - baseAngle;
+      if (diff > 180) diff -= 360;
+      if (diff < -180) diff += 360;
+
+      // ±5度の除外設定
+      if (Math.abs(diff) <= 5) {
+        return; // 中央付近はノーカウント
+      }
+
+      if (diff > 5) {
+        rightCount++;
+      } else if (diff < -5) {
+        leftCount++;
+      }
+      updateUI();
+    }
+
+    // 画面表示の更新
+    function updateUI() {
+      const total = leftCount + rightCount;
+      if (total === 0) return;
+
+      const leftPercent = Math.round((leftCount / total) * 100);
+      const rightPercent = Math.round((rightCount / total) * 100);
+
+      textLeft.textContent = leftPercent + "%";
+      textRight.textContent = rightPercent + "%";
+    }
+
+    // リセットボタン
+    btnReset.addEventListener('click', () => {
+      baseAngle = null;
+      leftCount = 0;
+      rightCount = 0;
+      isRunning = false;
+      clearInterval(timer);
+      
+      statusBadge.textContent = "未";
+      statusBadge.className = "status-badge status-un";
+      textLeft.textContent = "0%";
+      textRight.textContent = "0%";
+      ctx.clearRect(0, 0, arCanvas.width, arCanvas.height);
+    });
+  </script>
+</body>
+</html>

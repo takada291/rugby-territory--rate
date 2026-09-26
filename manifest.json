@@ -1,0 +1,21 @@
+{
+  "name": "テリトリー率",
+  "short_name": "テリトリー率",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#2e7d32",
+  "icons": [
+    {
+      "src": "icon_rugby-territory-rate.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon_rugby-territory-rate.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
