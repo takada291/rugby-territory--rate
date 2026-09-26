@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>テリトリー率 v0.1</title>
+  <title>テリトリー率 v0.2</title>
   <link rel="manifest" href="manifest.json">
   <style>
     body { font-family: sans-serif; margin: 0; padding: 10px; display: flex; flex-direction: column; align-items: center; background: #f0f0f0; touch-action: manipulation; }
@@ -30,28 +30,24 @@
 </head>
 <body>
 
-  <h1>テリトリー率 v0.1</h1>
+  <h1>テリトリー率 v0.2</h1>
 
-  <!-- さつえい動画エリア -->
   <div class="camera-container">
     <video id="video" autoplay playsinline muted></video>
     <canvas id="arCanvas"></canvas>
   </div>
 
   <div class="control-panel">
-    <!-- 基準角設定 -->
     <div class="row">
       <button id="btnSetBase" class="btn-primary">基準角設定</button>
       <span id="statusBadge" class="status-badge status-un">未</span>
     </div>
 
-    <!-- 実行 / 一時停止 -->
     <div class="row">
       <button id="btnPlay" class="btn-play">▷ 実行</button>
       <button id="btnPause" class="btn-pause">|| 一時停止</button>
     </div>
 
-    <!-- 左サイド / 右サイド テリトリー率 -->
     <div class="stats-container">
       <div class="stat-box">
         <div class="stat-title">左サイド</div>
@@ -63,29 +59,27 @@
       </div>
     </div>
 
-    <!-- リセットボタン -->
     <div class="reset-row">
       <button id="btnReset" class="btn-reset">リセット</button>
     </div>
   </div>
 
   <script>
-    // Service Workerの登録
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js');
       });
     }
 
-    // 変数定義
     let currentAlpha = null;
     let baseAngle = null;
     let leftCount = 0;
     let rightCount = 0;
     let isRunning = false;
     let timer = null;
+    let isWaitingForBase = false;
+    let isSensorAttached = false;
 
-    // DOM要素
     const video = document.getElementById('video');
     const arCanvas = document.getElementById('arCanvas');
     const ctx = arCanvas.getContext('2d');
@@ -114,42 +108,58 @@
     }
     initCamera();
 
-    // センサー値の取得
-    window.addEventListener('deviceorientation', (e) => {
-      // iOSの場合はwebkitCompassHeading、それ以外はalphaを使用
-      let alpha = e.webkitCompassHeading !== undefined ? e.webkitCompassHeading : e.alpha;
+    // センサーイベントハンドラ
+    function handleOrientation(e) {
+      let alpha = null;
+      // OS間の回転方向の違いを吸収し、右回りで数値が増加するように統一
+      if (e.webkitCompassHeading !== undefined) {
+        alpha = e.webkitCompassHeading; // iOS: 右回りで増加
+      } else if (e.alpha !== null) {
+        alpha = (360 - e.alpha) % 360;  // Android: 左回りで増加するため反転
+      }
+
       if (alpha !== null) {
-        // webkitCompassHeadingは北が0度。alphaは起動時が基準。どちらも相対計算可能。
         currentAlpha = alpha;
+
+        // 基準角設定の待機中であれば、最初の値を取得した瞬間にセットする
+        if (isWaitingForBase) {
+          baseAngle = currentAlpha;
+          isWaitingForBase = false;
+          statusBadge.textContent = "済";
+          statusBadge.className = "status-badge status-done";
+        }
         drawAR();
       }
-    });
+    }
 
-    // 基準角の設定（iOSの許可リクエスト含む）
+    // 基準角設定ボタン（iOSの許可リクエストと動画再開処理を含む）
     btnSetBase.addEventListener('click', () => {
+      // ダイアログ等で一時停止したカメラを確実に再開
+      if (video.paused) {
+        video.play().catch(e => console.log("再生エラー:", e));
+      }
+
       if (typeof DeviceOrientationEvent.requestPermission === 'function') {
         DeviceOrientationEvent.requestPermission()
           .then(permissionState => {
             if (permissionState === 'granted') {
-              setBaseAngle();
+              startSensor();
             } else {
               alert("センサーへのアクセスが拒否されました");
             }
           })
           .catch(console.error);
       } else {
-        setBaseAngle();
+        startSensor();
       }
     });
 
-    function setBaseAngle() {
-      if (currentAlpha !== null) {
-        baseAngle = currentAlpha;
-        statusBadge.textContent = "済";
-        statusBadge.className = "status-badge status-done";
-      } else {
-        alert("センサーから方位を取得できていません");
+    function startSensor() {
+      if (!isSensorAttached) {
+        window.addEventListener('deviceorientation', handleOrientation);
+        isSensorAttached = true;
       }
+      isWaitingForBase = true; // 次のセンサー値更新タイミングで基準角をセット
     }
 
     // AR表示（基準角を示す赤い縦線）
@@ -157,12 +167,10 @@
       ctx.clearRect(0, 0, arCanvas.width, arCanvas.height);
       if (baseAngle === null || currentAlpha === null) return;
 
-      // 角度差を計算（-180 〜 +180度）
       let diff = currentAlpha - baseAngle;
       if (diff > 180) diff -= 360;
       if (diff < -180) diff += 360;
 
-      // 視野角を約60度と仮定し、画面中心からのズレをピクセル換算
       const pxPerDegree = arCanvas.width / 60;
       const lineX = (arCanvas.width / 2) - (diff * pxPerDegree);
 
@@ -184,7 +192,6 @@
       }
       if (!isRunning) {
         isRunning = true;
-        // 1秒ごとに判定
         timer = setInterval(calculateTerritory, 1000);
       }
     });
@@ -197,17 +204,15 @@
 
     // テリトリー率の計算
     function calculateTerritory() {
-      if (currentAlpha === null) return;
+      if (currentAlpha === null || baseAngle === null) return;
 
       let diff = currentAlpha - baseAngle;
       if (diff > 180) diff -= 360;
       if (diff < -180) diff += 360;
 
-      // ±5度の除外設定
-      if (Math.abs(diff) <= 5) {
-        return; // 中央付近はノーカウント
-      }
+      if (Math.abs(diff) <= 5) return;
 
+      // diffがプラスなら右方向、マイナスなら左方向
       if (diff > 5) {
         rightCount++;
       } else if (diff < -5) {
@@ -234,6 +239,7 @@
       leftCount = 0;
       rightCount = 0;
       isRunning = false;
+      isWaitingForBase = false;
       clearInterval(timer);
       
       statusBadge.textContent = "未";
