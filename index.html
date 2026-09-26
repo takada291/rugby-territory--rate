@@ -3,44 +3,84 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>テリトリー率 v0.3</title>
+  <title>テリトリー率 v0.4</title>
   <link rel="manifest" href="manifest.json">
+  <!-- スクリーンショット機能のための外部ライブラリ (html2canvas) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <style>
-    body { font-family: sans-serif; margin: 0; padding: 10px; display: flex; flex-direction: column; align-items: center; background: #f0f0f0; touch-action: manipulation; }
-    h1 { font-size: 1.2rem; margin: 5px 0 15px; }
-    .camera-container { position: relative; width: 100%; max-width: 400px; aspect-ratio: 4/3; background: #000; border: 1px solid #333; }
+    body { font-family: sans-serif; margin: 0; padding: 10px; background: #f0f0f0; touch-action: manipulation; }
+    h1 { font-size: 1.1rem; margin: 0 0 10px; text-align: center; }
+    #clockDisplay { text-align: center; font-weight: bold; margin-bottom: 10px; color: #333; }
+    
+    .view-container { display: none; flex-direction: column; align-items: center; width: 100%; max-width: 450px; margin: 0 auto; }
+    .active-view { display: flex; }
+
+    .camera-container { position: relative; width: 100%; aspect-ratio: 4/3; background: #000; border: 1px solid #333; }
     video { width: 100%; height: 100%; object-fit: cover; }
     canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
-    .control-panel { width: 100%; max-width: 400px; margin-top: 15px; display: flex; flex-direction: column; gap: 15px; }
-    .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-    button { padding: 12px; font-size: 1rem; flex: 1; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; background: #e0e0e0; }
+    
+    .row { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; }
+    button { padding: 10px; font-size: 0.95rem; flex: 1; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; background: #e0e0e0; }
+    
+    .btn-capture { background: #ff9800; color: white; font-size: 0.85rem; }
     .btn-primary { background: #1976d2; color: white; }
-    .btn-play { background: #2e7d32; color: white; font-size: 1.2rem; }
-    .btn-pause { background: #d32f2f; color: white; font-size: 1.2rem; }
-    .status-badge { padding: 5px 10px; border-radius: 15px; font-size: 0.9rem; font-weight: bold; }
-    .status-un { background: #ffcc00; color: #333; }
+    .btn-play { background: #2e7d32; color: white; }
+    .btn-pause { background: #d32f2f; color: white; }
+    .btn-action { background: #607d8b; color: white; margin-top: 15px; }
+    .btn-danger { background: #757575; color: white; }
+    
+    .status-badge { padding: 5px 10px; border-radius: 15px; font-size: 0.8rem; font-weight: bold; background: #ffcc00; color: #333; }
     .status-done { background: #4caf50; color: white; }
-    .stats-container { display: flex; justify-content: space-between; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    
+    /* テリトリー率表示 */
+    .stats-container { display: flex; justify-content: space-between; width: 100%; background: white; padding: 10px; border-radius: 8px; margin-top: 10px; box-sizing: border-box; }
     .stat-box { text-align: center; width: 45%; }
-    .stat-title { font-size: 0.9rem; color: #666; }
-    .stat-value { font-size: 2rem; font-weight: bold; color: #1976d2; margin-top: 5px; }
-    .reset-row { display: flex; justify-content: flex-end; }
-    .btn-reset { flex: 0 0 auto; padding: 8px 20px; background: #757575; color: white; font-size: 0.9rem; }
+    .stat-title { font-size: 0.8rem; color: #666; }
+    .stat-value { font-size: 1.5rem; font-weight: bold; color: #1976d2; margin-top: 5px; }
+
+    /* イベント記録テーブル */
+    .event-table { width: 100%; background: white; margin-top: 10px; border-collapse: collapse; border-radius: 8px; overflow: hidden; font-size: 0.9rem; text-align: center; }
+    .event-table th { background: #eee; padding: 8px 4px; font-size: 0.8rem; }
+    .event-table td { border-bottom: 1px solid #eee; padding: 5px 2px; vertical-align: middle; }
+    .event-counter { display: flex; justify-content: center; align-items: center; gap: 5px; }
+    .event-counter button { flex: none; width: 30px; height: 30px; padding: 0; background: #f5f5f5; border: 1px solid #ccc; font-size: 1.2rem; color: #333; }
+    .event-counter span { display: inline-block; width: 20px; font-weight: bold; }
+    .ev-label { font-weight: bold; font-size: 1rem; color: #424242; }
+
+    /* タイムライン画面 */
+    .timeline-list { width: 100%; margin-top: 15px; display: flex; flex-direction: column; gap: 15px; background: white; padding: 15px; border-radius: 8px; box-sizing: border-box; }
+    .tl-row { display: flex; flex-direction: column; gap: 5px; border-bottom: 1px dashed #ccc; padding-bottom: 10px; }
+    .tl-time { font-size: 0.8rem; font-weight: bold; color: #555; }
+    .tl-bar-container { width: 100%; height: 20px; background: #eee; display: flex; border-radius: 3px; overflow: hidden; }
+    .tl-bar-l { background: #1976d2; height: 100%; }
+    .tl-bar-p { background: #9e9e9e; height: 100%; }
+    .tl-bar-r { background: #d32f2f; height: 100%; }
+    .tl-stats { display: flex; justify-content: space-between; font-size: 0.75rem; color: #333; }
+    .tl-legend { display: flex; gap: 10px; font-size: 0.75rem; justify-content: center; margin-bottom: 10px; }
+    .leg-item span { display: inline-block; width: 10px; height: 10px; margin-right: 3px; }
   </style>
 </head>
 <body>
 
-  <h1>テリトリー率 v0.3</h1>
+  <h1>テリトリー率 v0.4</h1>
+  <div id="clockDisplay"></div>
 
-  <div class="camera-container">
-    <video id="video" autoplay playsinline muted></video>
-    <canvas id="arCanvas"></canvas>
-  </div>
+  <!-- メイン画面 -->
+  <div id="mainView" class="view-container active-view">
+    
+    <div class="camera-container" id="captureArea">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="arCanvas"></canvas>
+    </div>
 
-  <div class="control-panel">
+    <div class="row">
+      <button id="btnPhoto" class="btn-capture">📷 カメラ</button>
+      <button id="btnScreenshotMain" class="btn-capture">📸 スクショ</button>
+    </div>
+
     <div class="row">
       <button id="btnSetBase" class="btn-primary">基準角設定</button>
-      <span id="statusBadge" class="status-badge status-un">未</span>
+      <span id="statusBadge" class="status-badge">未</span>
     </div>
 
     <div class="row">
@@ -49,219 +89,302 @@
     </div>
 
     <div class="stats-container">
-      <div class="stat-box">
-        <div class="stat-title">左サイド</div>
-        <div id="leftRate" class="stat-value">0%</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-title">右サイド</div>
-        <div id="rightRate" class="stat-value">0%</div>
-      </div>
+      <div class="stat-box"><div class="stat-title">左サイド</div><div id="leftRate" class="stat-value">0%</div></div>
+      <div class="stat-box"><div class="stat-title">右サイド</div><div id="rightRate" class="stat-value">0%</div></div>
     </div>
 
-    <div class="reset-row">
-      <button id="btnReset" class="btn-reset">リセット</button>
+    <table class="event-table">
+      <thead><tr><th>左チーム</th><th>カテゴリ</th><th>右チーム</th></tr></thead>
+      <tbody id="eventTbody">
+        <!-- JSで生成 -->
+      </tbody>
+    </table>
+
+    <button id="btnFinishHalf" class="btn-action" style="width: 100%;">前半または後半終了 → データをグラフ化</button>
+  </div>
+
+  <!-- タイムライン画面 -->
+  <div id="timelineView" class="view-container">
+    <h2>タイムライン (2分間隔)</h2>
+    
+    <div class="tl-legend">
+      <div class="leg-item"><span style="background:#1976d2;"></span>左陣</div>
+      <div class="leg-item"><span style="background:#9e9e9e;"></span>中断</div>
+      <div class="leg-item"><span style="background:#d32f2f;"></span>右陣</div>
+    </div>
+
+    <div id="timelineContainer" class="timeline-list">
+      <!-- JSでグラフ行を生成 -->
+    </div>
+
+    <div class="row" style="margin-top: 20px;">
+      <button id="btnScreenshotTimeline" class="btn-capture">📸 スクショ</button>
+    </div>
+    <div class="row">
+      <button id="btnResetAll" class="btn-danger">すべてリセット</button>
     </div>
   </div>
 
   <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js');
-      });
+    // --- 1. 時計表示 ---
+    function updateClock() {
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const MM = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const hh = String(now.getHours()).padStart(2, '0');
+      const mm = String(now.getMinutes()).padStart(2, '0');
+      document.getElementById('clockDisplay').textContent = `${yyyy}/${MM}/${dd} ${hh}:${mm}`;
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // --- 2. データ構造とストレージ ---
+    let matchData = { ticks: [], events: [] };
+    function loadData() {
+      const saved = localStorage.getItem('rugby_data_v4');
+      if (saved) matchData = JSON.parse(saved);
+    }
+    function saveData() {
+      localStorage.setItem('rugby_data_v4', JSON.stringify(matchData));
+    }
+    loadData();
+
+    // --- 3. イベントUIの生成 ---
+    const evTypes = ['S', 'L', 'T', 'C', 'P', 'D'];
+    const tbody = document.getElementById('eventTbody');
+    evTypes.forEach(type => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><div class="event-counter"><button onclick="modEvent('L','${type}',-1)">-</button><span id="cnt-L-${type}">0</span><button onclick="modEvent('L','${type}',1)">+</button></div></td>
+        <td class="ev-label">${type}</td>
+        <td><div class="event-counter"><button onclick="modEvent('R','${type}',-1)">-</button><span id="cnt-R-${type}">0</span><button onclick="modEvent('R','${type}',1)">+</button></div></td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    function modEvent(team, type, delta) {
+      if (delta > 0) {
+        matchData.events.push({ team, type, time: matchData.ticks.length });
+      } else {
+        // 直近の同種別イベントを1つ削除
+        for (let i = matchData.events.length - 1; i >= 0; i--) {
+          if (matchData.events[i].team === team && matchData.events[i].type === type) {
+            matchData.events.splice(i, 1);
+            break;
+          }
+        }
+      }
+      saveData();
+      renderEventCounts();
     }
 
-    let currentAlpha = null;
-    let baseAngle = null;
-    let leftCount = 0;
-    let rightCount = 0;
-    let isRunning = false;
-    let timer = null;
-    let isWaitingForBase = false;
-    let isSensorAttached = false;
+    function renderEventCounts() {
+      const counts = { L: {}, R: {} };
+      evTypes.forEach(t => { counts.L[t] = 0; counts.R[t] = 0; });
+      matchData.events.forEach(e => { if(counts[e.team] && counts[e.team][e.type] !== undefined) counts[e.team][e.type]++; });
+      evTypes.forEach(t => {
+        document.getElementById(`cnt-L-${t}`).textContent = counts.L[t];
+        document.getElementById(`cnt-R-${t}`).textContent = counts.R[t];
+      });
+    }
+    renderEventCounts(); // 初期描画
 
-    // 平滑化（ローパスフィルタ）用の変数
-    let smoothedX = 0;
-    let smoothedY = 0;
-    let isFirstReading = true;
-    const FILTER_COEF = 0.15; // 0.1〜0.2程度。小さいほど安定するが追従が遅れる
-
+    // --- 4. センサー＆タイマーロジック ---
     const video = document.getElementById('video');
     const arCanvas = document.getElementById('arCanvas');
     const ctx = arCanvas.getContext('2d');
-    const btnSetBase = document.getElementById('btnSetBase');
-    const statusBadge = document.getElementById('statusBadge');
-    const btnPlay = document.getElementById('btnPlay');
-    const btnPause = document.getElementById('btnPause');
-    const btnReset = document.getElementById('btnReset');
-    const textLeft = document.getElementById('leftRate');
-    const textRight = document.getElementById('rightRate');
+    
+    let baseAngle = null;
+    let currentAlpha = null;
+    let isRunning = false;
+    let hasStarted = false; // 一度でも実行を押したか
+    let globalTimer = null;
+    let isWaitingForBase = false;
+
+    let smoothedX = 0, smoothedY = 0, isFirstReading = true;
+    const FILTER_COEF = 0.15;
 
     async function initCamera() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment' }
-        });
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
         video.srcObject = stream;
-        video.onloadedmetadata = () => {
-          arCanvas.width = video.clientWidth;
-          arCanvas.height = video.clientHeight;
-        };
-      } catch (err) {
-        alert("カメラの起動に失敗しました: " + err.message);
-      }
+        video.onloadedmetadata = () => { arCanvas.width = video.clientWidth; arCanvas.height = video.clientHeight; };
+      } catch (err) { alert("カメラ起動エラー: " + err.message); }
     }
     initCamera();
 
     function handleOrientation(e) {
       let rawAlpha = null;
-      if (e.webkitCompassHeading !== undefined) {
-        rawAlpha = e.webkitCompassHeading;
-      } else if (e.alpha !== null) {
-        rawAlpha = (360 - e.alpha) % 360; 
-      }
+      if (e.webkitCompassHeading !== undefined) rawAlpha = e.webkitCompassHeading;
+      else if (e.alpha !== null) rawAlpha = (360 - e.alpha) % 360;
 
       if (rawAlpha !== null) {
-        // --- 角度の平滑化処理（Androidのブレ対策） ---
         const rad = rawAlpha * (Math.PI / 180);
-        const curX = Math.cos(rad);
-        const curY = Math.sin(rad);
-
-        if (isFirstReading) {
-          smoothedX = curX;
-          smoothedY = curY;
-          isFirstReading = false;
-        } else {
-          smoothedX = (curX * FILTER_COEF) + (smoothedX * (1 - FILTER_COEF));
-          smoothedY = (curY * FILTER_COEF) + (smoothedY * (1 - FILTER_COEF));
-        }
-
+        const curX = Math.cos(rad), curY = Math.sin(rad);
+        if (isFirstReading) { smoothedX = curX; smoothedY = curY; isFirstReading = false; }
+        else { smoothedX = (curX * FILTER_COEF) + (smoothedX * (1 - FILTER_COEF)); smoothedY = (curY * FILTER_COEF) + (smoothedY * (1 - FILTER_COEF)); }
+        
         let smoothedAlpha = Math.atan2(smoothedY, smoothedX) * (180 / Math.PI);
         if (smoothedAlpha < 0) smoothedAlpha += 360;
-        
         currentAlpha = smoothedAlpha;
-        // ------------------------------------------
 
         if (isWaitingForBase) {
           baseAngle = currentAlpha;
           isWaitingForBase = false;
-          statusBadge.textContent = "済";
-          statusBadge.className = "status-badge status-done";
+          document.getElementById('statusBadge').textContent = "済";
+          document.getElementById('statusBadge').className = "status-badge status-done";
         }
         drawAR();
       }
     }
 
-    btnSetBase.addEventListener('click', () => {
-      if (video.paused) {
-        video.play().catch(e => console.log("再生エラー:", e));
-      }
-
+    document.getElementById('btnSetBase').addEventListener('click', () => {
+      if (video.paused) video.play().catch(()=>{});
       if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-        DeviceOrientationEvent.requestPermission()
-          .then(permissionState => {
-            if (permissionState === 'granted') {
-              startSensor();
-            } else {
-              alert("センサーへのアクセスが拒否されました");
-            }
-          })
-          .catch(console.error);
+        DeviceOrientationEvent.requestPermission().then(p => {
+          if(p === 'granted') { window.addEventListener('deviceorientation', handleOrientation); isWaitingForBase = true; isFirstReading = true; }
+        }).catch(console.error);
       } else {
-        startSensor();
+        window.addEventListener('deviceorientation', handleOrientation);
+        isWaitingForBase = true; isFirstReading = true;
       }
     });
-
-    function startSensor() {
-      if (!isSensorAttached) {
-        window.addEventListener('deviceorientation', handleOrientation);
-        isSensorAttached = true;
-      }
-      isWaitingForBase = true;
-      // 再設定時にフィルターをリセットして即座に現在角を反映させる
-      isFirstReading = true; 
-    }
 
     function drawAR() {
       ctx.clearRect(0, 0, arCanvas.width, arCanvas.height);
       if (baseAngle === null || currentAlpha === null) return;
-
       let diff = currentAlpha - baseAngle;
-      if (diff > 180) diff -= 360;
-      if (diff < -180) diff += 360;
-
+      if (diff > 180) diff -= 360; if (diff < -180) diff += 360;
       const pxPerDegree = arCanvas.width / 60;
       const lineX = (arCanvas.width / 2) - (diff * pxPerDegree);
-
       if (lineX >= 0 && lineX <= arCanvas.width) {
-        ctx.beginPath();
-        ctx.moveTo(lineX, 0);
-        ctx.lineTo(lineX, arCanvas.height);
-        ctx.strokeStyle = 'red';
-        ctx.lineWidth = 3;
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(lineX, 0); ctx.lineTo(lineX, arCanvas.height);
+        ctx.strokeStyle = 'red'; ctx.lineWidth = 3; ctx.stroke();
       }
     }
 
-    btnPlay.addEventListener('click', () => {
-      if (baseAngle === null) {
-        alert("先に基準角を設定してください");
-        return;
-      }
-      if (!isRunning) {
-        isRunning = true;
-        timer = setInterval(calculateTerritory, 1000);
+    // --- 5. 時間経過ごとの記録処理 ---
+    document.getElementById('btnPlay').addEventListener('click', () => {
+      if (baseAngle === null) { alert("基準角を設定してください"); return; }
+      isRunning = true;
+      if (!hasStarted) {
+        hasStarted = true;
+        globalTimer = setInterval(tickSecond, 1000);
       }
     });
 
-    btnPause.addEventListener('click', () => {
-      isRunning = false;
-      clearInterval(timer);
-    });
+    document.getElementById('btnPause').addEventListener('click', () => { isRunning = false; });
 
-    function calculateTerritory() {
-      if (currentAlpha === null || baseAngle === null) return;
-
-      let diff = currentAlpha - baseAngle;
-      if (diff > 180) diff -= 360;
-      if (diff < -180) diff += 360;
-
-      if (Math.abs(diff) <= 5) return;
-
-      if (diff > 5) {
-        rightCount++;
-      } else if (diff < -5) {
-        leftCount++;
+    function tickSecond() {
+      let state = 'P'; // 中断
+      if (isRunning && currentAlpha !== null && baseAngle !== null) {
+        let diff = currentAlpha - baseAngle;
+        if (diff > 180) diff -= 360; if (diff < -180) diff += 360;
+        if (Math.abs(diff) > 5) {
+          state = (diff > 5) ? 'R' : 'L';
+        }
       }
-      updateUI();
+      matchData.ticks.push(state);
+      saveData();
+      updateTerritoryUI();
     }
 
-    function updateUI() {
-      const total = leftCount + rightCount;
-      if (total === 0) return;
+    function updateTerritoryUI() {
+      let l=0, r=0;
+      matchData.ticks.forEach(t => { if(t==='L') l++; if(t==='R') r++; });
+      const total = l + r;
+      document.getElementById('leftRate').textContent = total > 0 ? Math.round((l/total)*100) + "%" : "0%";
+      document.getElementById('rightRate').textContent = total > 0 ? Math.round((r/total)*100) + "%" : "0%";
+    }
+    updateTerritoryUI(); // 初期描画
 
-      const leftPercent = Math.round((leftCount / total) * 100);
-      const rightPercent = Math.round((rightCount / total) * 100);
-
-      textLeft.textContent = leftPercent + "%";
-      textRight.textContent = rightPercent + "%";
+    // --- 6. 画像ダウンロード機能 ---
+    function triggerDownload(canvas, filename) {
+      const a = document.createElement('a');
+      a.href = canvas.toDataURL("image/jpeg", 0.9);
+      a.download = filename;
+      a.click();
     }
 
-    btnReset.addEventListener('click', () => {
-      baseAngle = null;
-      leftCount = 0;
-      rightCount = 0;
-      isRunning = false;
-      isWaitingForBase = false;
-      isFirstReading = true; // フィルターもリセット
-      clearInterval(timer);
-      
-      statusBadge.textContent = "未";
-      statusBadge.className = "status-badge status-un";
-      textLeft.textContent = "0%";
-      textRight.textContent = "0%";
-      ctx.clearRect(0, 0, arCanvas.width, arCanvas.height);
+    // カメラ（動画の1フレーム）
+    document.getElementById('btnPhoto').addEventListener('click', () => {
+      const tmpCanvas = document.createElement('canvas');
+      tmpCanvas.width = video.videoWidth; tmpCanvas.height = video.videoHeight;
+      tmpCanvas.getContext('2d').drawImage(video, 0, 0, tmpCanvas.width, tmpCanvas.height);
+      triggerDownload(tmpCanvas, `rugby_photo_${Date.now()}.jpg`);
     });
+
+    // メイン画面スクショ (html2canvas)
+    document.getElementById('btnScreenshotMain').addEventListener('click', () => {
+      html2canvas(document.getElementById('mainView')).then(c => triggerDownload(c, `rugby_main_${Date.now()}.jpg`));
+    });
+
+    // タイムラインスクショ
+    document.getElementById('btnScreenshotTimeline').addEventListener('click', () => {
+      html2canvas(document.getElementById('timelineView')).then(c => triggerDownload(c, `rugby_timeline_${Date.now()}.jpg`));
+    });
+
+    // --- 7. タイムライン・グラフ化処理 ---
+    document.getElementById('btnFinishHalf').addEventListener('click', () => {
+      document.getElementById('mainView').classList.remove('active-view');
+      document.getElementById('timelineView').classList.add('active-view');
+      generateTimeline();
+    });
+
+    function generateTimeline() {
+      const container = document.getElementById('timelineContainer');
+      container.innerHTML = '';
+      const chunkSize = 120; // 2分 = 120秒
+
+      for (let i = 0; i < matchData.ticks.length; i += chunkSize) {
+        const chunk = matchData.ticks.slice(i, i + chunkSize);
+        let l=0, p=0, r=0;
+        chunk.forEach(t => { if(t==='L') l++; else if(t==='R') r++; else p++; });
+        
+        const tot = chunk.length;
+        const lPct = (l/tot)*100, pPct = (p/tot)*100, rPct = (r/tot)*100;
+
+        // イベント集計 (S, L, T のみ)
+        const cEvs = matchData.events.filter(e => e.time >= i && e.time < i + chunkSize);
+        let lS=0, lL=0, lT=0, rS=0, rL=0, rT=0;
+        cEvs.forEach(e => {
+          if (e.team === 'L') { if(e.type==='S') lS++; if(e.type==='L') lL++; if(e.type==='T') lT++; }
+          else { if(e.type==='S') rS++; if(e.type==='L') rL++; if(e.type==='T') rT++; }
+        });
+
+        const startMin = Math.floor(i / 60);
+        const endMin = Math.floor(Math.min(i + chunkSize, matchData.ticks.length) / 60);
+        
+        const rowHTML = `
+          <div class="tl-row">
+            <div class="tl-time">${startMin}分 〜 ${endMin}分</div>
+            <div class="tl-bar-container">
+              <div class="tl-bar-l" style="width: ${lPct}%;"></div>
+              <div class="tl-bar-p" style="width: ${pPct}%;"></div>
+              <div class="tl-bar-r" style="width: ${rPct}%;"></div>
+            </div>
+            <div class="tl-stats">
+              <span>左 S:${lS} L:${lL} T:${lT}</span>
+              <span>右 S:${rS} L:${rL} T:${rT}</span>
+            </div>
+          </div>
+        `;
+        container.insertAdjacentHTML('beforeend', rowHTML);
+      }
+      if (matchData.ticks.length === 0) container.innerHTML = '<p>データがありません</p>';
+    }
+
+    // --- 8. 全てリセット ---
+    document.getElementById('btnResetAll').addEventListener('click', () => {
+      if(confirm('記録データをすべて削除してリセットしますか？')) {
+        clearInterval(globalTimer);
+        matchData = { ticks: [], events: [] };
+        saveData();
+        location.reload(); // 画面を初期状態に戻すための最善策
+      }
+    });
+
   </script>
 </body>
 </html>
