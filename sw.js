@@ -1,4 +1,4 @@
-const CACHE_NAME = 'territory-rate-v0.3';
+const CACHE_NAME = 'territory-rate-v0.4';
 const urlsToCache = [
   './',
   './index.html',
