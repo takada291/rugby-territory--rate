@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>テリトリー率 v0.2</title>
+  <title>テリトリー率 v0.3</title>
   <link rel="manifest" href="manifest.json">
   <style>
     body { font-family: sans-serif; margin: 0; padding: 10px; display: flex; flex-direction: column; align-items: center; background: #f0f0f0; touch-action: manipulation; }
@@ -30,7 +30,7 @@
 </head>
 <body>
 
-  <h1>テリトリー率 v0.2</h1>
+  <h1>テリトリー率 v0.3</h1>
 
   <div class="camera-container">
     <video id="video" autoplay playsinline muted></video>
@@ -80,6 +80,12 @@
     let isWaitingForBase = false;
     let isSensorAttached = false;
 
+    // 平滑化（ローパスフィルタ）用の変数
+    let smoothedX = 0;
+    let smoothedY = 0;
+    let isFirstReading = true;
+    const FILTER_COEF = 0.15; // 0.1〜0.2程度。小さいほど安定するが追従が遅れる
+
     const video = document.getElementById('video');
     const arCanvas = document.getElementById('arCanvas');
     const ctx = arCanvas.getContext('2d');
@@ -91,7 +97,6 @@
     const textLeft = document.getElementById('leftRate');
     const textRight = document.getElementById('rightRate');
 
-    // カメラ起動
     async function initCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -108,20 +113,35 @@
     }
     initCamera();
 
-    // センサーイベントハンドラ
     function handleOrientation(e) {
-      let alpha = null;
-      // OS間の回転方向の違いを吸収し、右回りで数値が増加するように統一
+      let rawAlpha = null;
       if (e.webkitCompassHeading !== undefined) {
-        alpha = e.webkitCompassHeading; // iOS: 右回りで増加
+        rawAlpha = e.webkitCompassHeading;
       } else if (e.alpha !== null) {
-        alpha = (360 - e.alpha) % 360;  // Android: 左回りで増加するため反転
+        rawAlpha = (360 - e.alpha) % 360; 
       }
 
-      if (alpha !== null) {
-        currentAlpha = alpha;
+      if (rawAlpha !== null) {
+        // --- 角度の平滑化処理（Androidのブレ対策） ---
+        const rad = rawAlpha * (Math.PI / 180);
+        const curX = Math.cos(rad);
+        const curY = Math.sin(rad);
 
-        // 基準角設定の待機中であれば、最初の値を取得した瞬間にセットする
+        if (isFirstReading) {
+          smoothedX = curX;
+          smoothedY = curY;
+          isFirstReading = false;
+        } else {
+          smoothedX = (curX * FILTER_COEF) + (smoothedX * (1 - FILTER_COEF));
+          smoothedY = (curY * FILTER_COEF) + (smoothedY * (1 - FILTER_COEF));
+        }
+
+        let smoothedAlpha = Math.atan2(smoothedY, smoothedX) * (180 / Math.PI);
+        if (smoothedAlpha < 0) smoothedAlpha += 360;
+        
+        currentAlpha = smoothedAlpha;
+        // ------------------------------------------
+
         if (isWaitingForBase) {
           baseAngle = currentAlpha;
           isWaitingForBase = false;
@@ -132,9 +152,7 @@
       }
     }
 
-    // 基準角設定ボタン（iOSの許可リクエストと動画再開処理を含む）
     btnSetBase.addEventListener('click', () => {
-      // ダイアログ等で一時停止したカメラを確実に再開
       if (video.paused) {
         video.play().catch(e => console.log("再生エラー:", e));
       }
@@ -159,10 +177,11 @@
         window.addEventListener('deviceorientation', handleOrientation);
         isSensorAttached = true;
       }
-      isWaitingForBase = true; // 次のセンサー値更新タイミングで基準角をセット
+      isWaitingForBase = true;
+      // 再設定時にフィルターをリセットして即座に現在角を反映させる
+      isFirstReading = true; 
     }
 
-    // AR表示（基準角を示す赤い縦線）
     function drawAR() {
       ctx.clearRect(0, 0, arCanvas.width, arCanvas.height);
       if (baseAngle === null || currentAlpha === null) return;
@@ -184,7 +203,6 @@
       }
     }
 
-    // 実行ボタン
     btnPlay.addEventListener('click', () => {
       if (baseAngle === null) {
         alert("先に基準角を設定してください");
@@ -196,13 +214,11 @@
       }
     });
 
-    // 一時停止ボタン
     btnPause.addEventListener('click', () => {
       isRunning = false;
       clearInterval(timer);
     });
 
-    // テリトリー率の計算
     function calculateTerritory() {
       if (currentAlpha === null || baseAngle === null) return;
 
@@ -212,7 +228,6 @@
 
       if (Math.abs(diff) <= 5) return;
 
-      // diffがプラスなら右方向、マイナスなら左方向
       if (diff > 5) {
         rightCount++;
       } else if (diff < -5) {
@@ -221,7 +236,6 @@
       updateUI();
     }
 
-    // 画面表示の更新
     function updateUI() {
       const total = leftCount + rightCount;
       if (total === 0) return;
@@ -233,13 +247,13 @@
       textRight.textContent = rightPercent + "%";
     }
 
-    // リセットボタン
     btnReset.addEventListener('click', () => {
       baseAngle = null;
       leftCount = 0;
       rightCount = 0;
       isRunning = false;
       isWaitingForBase = false;
+      isFirstReading = true; // フィルターもリセット
       clearInterval(timer);
       
       statusBadge.textContent = "未";
