@@ -3,24 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>テリトリー率 v0.4</title>
+  <title>テリトリー率 v0.5</title>
   <link rel="manifest" href="manifest.json">
-  <!-- スクリーンショット機能のための外部ライブラリ (html2canvas) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <style>
     body { font-family: sans-serif; margin: 0; padding: 10px; background: #f0f0f0; touch-action: manipulation; }
-    h1 { font-size: 1.1rem; margin: 0 0 10px; text-align: center; }
-    #clockDisplay { text-align: center; font-weight: bold; margin-bottom: 10px; color: #333; }
+    h1 { font-size: 1.1rem; margin: 0 0 10px; text-align: center; color: #333; }
+    #clockDisplay { font-weight: normal; font-size: 0.9rem; margin-left: 10px; }
     
     .view-container { display: none; flex-direction: column; align-items: center; width: 100%; max-width: 450px; margin: 0 auto; }
     .active-view { display: flex; }
 
-    .camera-container { position: relative; width: 100%; aspect-ratio: 4/3; background: #000; border: 1px solid #333; }
+    /* カメラ領域の上下を少し狭める（16:9に変更） */
+    .camera-container { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; border: 1px solid #333; }
     video { width: 100%; height: 100%; object-fit: cover; }
     canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
     
     .row { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; }
-    button { padding: 10px; font-size: 0.95rem; flex: 1; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; background: #e0e0e0; }
+    button { padding: 10px; font-size: 0.95rem; flex: 1; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; background: #e0e0e0; transition: 0.2s; }
     
     .btn-capture { background: #ff9800; color: white; font-size: 0.85rem; }
     .btn-primary { background: #1976d2; color: white; }
@@ -29,15 +29,12 @@
     .btn-action { background: #607d8b; color: white; margin-top: 15px; }
     .btn-danger { background: #757575; color: white; }
     
+    /* グレーアウト用のクラス */
+    .btn-disabled { background: #bdbdbd !important; color: #757575 !important; pointer-events: none; }
+    
     .status-badge { padding: 5px 10px; border-radius: 15px; font-size: 0.8rem; font-weight: bold; background: #ffcc00; color: #333; }
     .status-done { background: #4caf50; color: white; }
     
-    /* テリトリー率表示 */
-    .stats-container { display: flex; justify-content: space-between; width: 100%; background: white; padding: 10px; border-radius: 8px; margin-top: 10px; box-sizing: border-box; }
-    .stat-box { text-align: center; width: 45%; }
-    .stat-title { font-size: 0.8rem; color: #666; }
-    .stat-value { font-size: 1.5rem; font-weight: bold; color: #1976d2; margin-top: 5px; }
-
     /* イベント記録テーブル */
     .event-table { width: 100%; background: white; margin-top: 10px; border-collapse: collapse; border-radius: 8px; overflow: hidden; font-size: 0.9rem; text-align: center; }
     .event-table th { background: #eee; padding: 8px 4px; font-size: 0.8rem; }
@@ -48,7 +45,12 @@
     .ev-label { font-weight: bold; font-size: 1rem; color: #424242; }
 
     /* タイムライン画面 */
-    .timeline-list { width: 100%; margin-top: 15px; display: flex; flex-direction: column; gap: 15px; background: white; padding: 15px; border-radius: 8px; box-sizing: border-box; }
+    .timeline-header { width: 100%; text-align: center; background: white; padding: 10px; border-radius: 8px; margin-bottom: 10px; box-sizing: border-box; }
+    .avg-rates { display: flex; justify-content: space-around; font-size: 1.2rem; font-weight: bold; margin-top: 5px; }
+    .avg-rates .l-rate { color: #1976d2; }
+    .avg-rates .r-rate { color: #d32f2f; }
+    
+    .timeline-list { width: 100%; display: flex; flex-direction: column; gap: 15px; background: white; padding: 15px; border-radius: 8px; box-sizing: border-box; }
     .tl-row { display: flex; flex-direction: column; gap: 5px; border-bottom: 1px dashed #ccc; padding-bottom: 10px; }
     .tl-time { font-size: 0.8rem; font-weight: bold; color: #555; }
     .tl-bar-container { width: 100%; height: 20px; background: #eee; display: flex; border-radius: 3px; overflow: hidden; }
@@ -62,8 +64,8 @@
 </head>
 <body>
 
-  <h1>テリトリー率 v0.4</h1>
-  <div id="clockDisplay"></div>
+  <!-- タイトルの横に時計を配置 -->
+  <h1>テリトリー率 v0.5<span id="clockDisplay"></span></h1>
 
   <!-- メイン画面 -->
   <div id="mainView" class="view-container active-view">
@@ -85,16 +87,13 @@
 
     <div class="row">
       <button id="btnPlay" class="btn-play">▷ 実行</button>
-      <button id="btnPause" class="btn-pause">|| 一時停止</button>
-    </div>
-
-    <div class="stats-container">
-      <div class="stat-box"><div class="stat-title">左サイド</div><div id="leftRate" class="stat-value">0%</div></div>
-      <div class="stat-box"><div class="stat-title">右サイド</div><div id="rightRate" class="stat-value">0%</div></div>
+      <!-- 初期状態では一時停止ボタンをグレーアウト -->
+      <button id="btnPause" class="btn-pause btn-disabled">|| 一時停止</button>
     </div>
 
     <table class="event-table">
-      <thead><tr><th>左チーム</th><th>カテゴリ</th><th>右チーム</th></tr></thead>
+      <!-- カテゴリをイベントに変更 -->
+      <thead><tr><th>左チーム</th><th>イベント</th><th>右チーム</th></tr></thead>
       <tbody id="eventTbody">
         <!-- JSで生成 -->
       </tbody>
@@ -105,8 +104,14 @@
 
   <!-- タイムライン画面 -->
   <div id="timelineView" class="view-container">
-    <h2>タイムライン (2分間隔)</h2>
     
+    <div class="timeline-header">
+      <div style="font-size: 0.9rem; color: #666;">全体平均テリトリー率</div>
+      <div class="avg-rates" id="avgRatesDisplay">
+        <!-- JSで平均値を挿入 -->
+      </div>
+    </div>
+
     <div class="tl-legend">
       <div class="leg-item"><span style="background:#1976d2;"></span>左陣</div>
       <div class="leg-item"><span style="background:#9e9e9e;"></span>中断</div>
@@ -117,8 +122,15 @@
       <!-- JSでグラフ行を生成 -->
     </div>
 
+    <!-- 各種アクションボタン -->
     <div class="row" style="margin-top: 20px;">
       <button id="btnScreenshotTimeline" class="btn-capture">📸 スクショ</button>
+    </div>
+    <div class="row">
+      <button id="btnBackToMain" class="btn-primary">メイン画面へ戻る</button>
+    </div>
+    <div class="row">
+      <button id="btnExportCSV" class="btn-action">📄 CSV書き出し</button>
     </div>
     <div class="row">
       <button id="btnResetAll" class="btn-danger">すべてリセット</button>
@@ -126,31 +138,30 @@
   </div>
 
   <script>
-    // --- 1. 時計表示 ---
+    // --- 時計表示 ---
     function updateClock() {
       const now = new Date();
-      const yyyy = now.getFullYear();
       const MM = String(now.getMonth() + 1).padStart(2, '0');
       const dd = String(now.getDate()).padStart(2, '0');
       const hh = String(now.getHours()).padStart(2, '0');
       const mm = String(now.getMinutes()).padStart(2, '0');
-      document.getElementById('clockDisplay').textContent = `${yyyy}/${MM}/${dd} ${hh}:${mm}`;
+      document.getElementById('clockDisplay').textContent = ` ${MM}/${dd} ${hh}:${mm}`;
     }
     setInterval(updateClock, 1000);
     updateClock();
 
-    // --- 2. データ構造とストレージ ---
+    // --- データ構造とストレージ ---
     let matchData = { ticks: [], events: [] };
     function loadData() {
-      const saved = localStorage.getItem('rugby_data_v4');
+      const saved = localStorage.getItem('rugby_data_v5');
       if (saved) matchData = JSON.parse(saved);
     }
     function saveData() {
-      localStorage.setItem('rugby_data_v4', JSON.stringify(matchData));
+      localStorage.setItem('rugby_data_v5', JSON.stringify(matchData));
     }
     loadData();
 
-    // --- 3. イベントUIの生成 ---
+    // --- イベントUIの生成 ---
     const evTypes = ['S', 'L', 'T', 'C', 'P', 'D'];
     const tbody = document.getElementById('eventTbody');
     evTypes.forEach(type => {
@@ -167,7 +178,6 @@
       if (delta > 0) {
         matchData.events.push({ team, type, time: matchData.ticks.length });
       } else {
-        // 直近の同種別イベントを1つ削除
         for (let i = matchData.events.length - 1; i >= 0; i--) {
           if (matchData.events[i].team === team && matchData.events[i].type === type) {
             matchData.events.splice(i, 1);
@@ -188,9 +198,9 @@
         document.getElementById(`cnt-R-${t}`).textContent = counts.R[t];
       });
     }
-    renderEventCounts(); // 初期描画
+    renderEventCounts();
 
-    // --- 4. センサー＆タイマーロジック ---
+    // --- センサー＆タイマーロジック ---
     const video = document.getElementById('video');
     const arCanvas = document.getElementById('arCanvas');
     const ctx = arCanvas.getContext('2d');
@@ -198,12 +208,14 @@
     let baseAngle = null;
     let currentAlpha = null;
     let isRunning = false;
-    let hasStarted = false; // 一度でも実行を押したか
+    let hasStarted = false;
     let globalTimer = null;
     let isWaitingForBase = false;
-
     let smoothedX = 0, smoothedY = 0, isFirstReading = true;
     const FILTER_COEF = 0.15;
+
+    const btnPlay = document.getElementById('btnPlay');
+    const btnPause = document.getElementById('btnPause');
 
     async function initCamera() {
       try {
@@ -264,20 +276,32 @@
       }
     }
 
-    // --- 5. 時間経過ごとの記録処理 ---
-    document.getElementById('btnPlay').addEventListener('click', () => {
+    // 実行ボタン
+    btnPlay.addEventListener('click', () => {
       if (baseAngle === null) { alert("基準角を設定してください"); return; }
       isRunning = true;
+      
+      // ボタンのグレーアウト切り替え
+      btnPlay.classList.add('btn-disabled');
+      btnPause.classList.remove('btn-disabled');
+
       if (!hasStarted) {
         hasStarted = true;
         globalTimer = setInterval(tickSecond, 1000);
       }
     });
 
-    document.getElementById('btnPause').addEventListener('click', () => { isRunning = false; });
+    // 一時停止ボタン
+    btnPause.addEventListener('click', () => { 
+      isRunning = false; 
+      
+      // ボタンのグレーアウト切り替え
+      btnPause.classList.add('btn-disabled');
+      btnPlay.classList.remove('btn-disabled');
+    });
 
     function tickSecond() {
-      let state = 'P'; // 中断
+      let state = 'P'; 
       if (isRunning && currentAlpha !== null && baseAngle !== null) {
         let diff = currentAlpha - baseAngle;
         if (diff > 180) diff -= 360; if (diff < -180) diff += 360;
@@ -287,52 +311,77 @@
       }
       matchData.ticks.push(state);
       saveData();
-      updateTerritoryUI();
     }
 
-    function updateTerritoryUI() {
-      let l=0, r=0;
-      matchData.ticks.forEach(t => { if(t==='L') l++; if(t==='R') r++; });
-      const total = l + r;
-      document.getElementById('leftRate').textContent = total > 0 ? Math.round((l/total)*100) + "%" : "0%";
-      document.getElementById('rightRate').textContent = total > 0 ? Math.round((r/total)*100) + "%" : "0%";
+    // --- iOS対応の共有・保存処理 ---
+    async function shareOrDownload(canvas, filename) {
+      canvas.toBlob(async (blob) => {
+        if (navigator.canShare) {
+          const file = new File([blob], filename, { type: 'image/jpeg' });
+          if (navigator.canShare({ files: [file] })) {
+            try {
+              await navigator.share({
+                files: [file],
+                title: filename
+              });
+              return; // 成功すればここで終了
+            } catch (err) {
+              console.log('Share canceled', err);
+            }
+          }
+        }
+        // ShareAPIが使えない場合やキャンセルされた場合のフォールバック（強制ダウンロード）
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+      }, 'image/jpeg', 0.9);
     }
-    updateTerritoryUI(); // 初期描画
 
-    // --- 6. 画像ダウンロード機能 ---
-    function triggerDownload(canvas, filename) {
-      const a = document.createElement('a');
-      a.href = canvas.toDataURL("image/jpeg", 0.9);
-      a.download = filename;
-      a.click();
-    }
-
-    // カメラ（動画の1フレーム）
     document.getElementById('btnPhoto').addEventListener('click', () => {
       const tmpCanvas = document.createElement('canvas');
       tmpCanvas.width = video.videoWidth; tmpCanvas.height = video.videoHeight;
       tmpCanvas.getContext('2d').drawImage(video, 0, 0, tmpCanvas.width, tmpCanvas.height);
-      triggerDownload(tmpCanvas, `rugby_photo_${Date.now()}.jpg`);
+      shareOrDownload(tmpCanvas, `rugby_photo_${Date.now()}.jpg`);
     });
 
-    // メイン画面スクショ (html2canvas)
     document.getElementById('btnScreenshotMain').addEventListener('click', () => {
-      html2canvas(document.getElementById('mainView')).then(c => triggerDownload(c, `rugby_main_${Date.now()}.jpg`));
+      html2canvas(document.getElementById('mainView')).then(c => shareOrDownload(c, `rugby_main_${Date.now()}.jpg`));
     });
 
-    // タイムラインスクショ
     document.getElementById('btnScreenshotTimeline').addEventListener('click', () => {
-      html2canvas(document.getElementById('timelineView')).then(c => triggerDownload(c, `rugby_timeline_${Date.now()}.jpg`));
+      html2canvas(document.getElementById('timelineView')).then(c => shareOrDownload(c, `rugby_timeline_${Date.now()}.jpg`));
     });
 
-    // --- 7. タイムライン・グラフ化処理 ---
+    // --- タイムライン・グラフ化処理 ---
     document.getElementById('btnFinishHalf').addEventListener('click', () => {
       document.getElementById('mainView').classList.remove('active-view');
       document.getElementById('timelineView').classList.add('active-view');
       generateTimeline();
     });
 
+    // メイン画面へ戻るボタン
+    document.getElementById('btnBackToMain').addEventListener('click', () => {
+      document.getElementById('timelineView').classList.remove('active-view');
+      document.getElementById('mainView').classList.add('active-view');
+    });
+
     function generateTimeline() {
+      // 1. 全体平均テリトリー率の計算
+      let totalL = 0, totalR = 0;
+      matchData.ticks.forEach(t => { if(t==='L') totalL++; if(t==='R') totalR++; });
+      const overallTotal = totalL + totalR;
+      const displayL = overallTotal > 0 ? Math.round((totalL / overallTotal) * 100) : 0;
+      const displayR = overallTotal > 0 ? Math.round((totalR / overallTotal) * 100) : 0;
+      
+      document.getElementById('avgRatesDisplay').innerHTML = `
+        <div class="l-rate">左陣 ${displayL}%</div>
+        <div class="r-rate">右陣 ${displayR}%</div>
+      `;
+
+      // 2. タイムライン生成
       const container = document.getElementById('timelineContainer');
       container.innerHTML = '';
       const chunkSize = 120; // 2分 = 120秒
@@ -345,7 +394,6 @@
         const tot = chunk.length;
         const lPct = (l/tot)*100, pPct = (p/tot)*100, rPct = (r/tot)*100;
 
-        // イベント集計 (S, L, T のみ)
         const cEvs = matchData.events.filter(e => e.time >= i && e.time < i + chunkSize);
         let lS=0, lL=0, lT=0, rS=0, rL=0, rT=0;
         cEvs.forEach(e => {
@@ -356,6 +404,7 @@
         const startMin = Math.floor(i / 60);
         const endMin = Math.floor(Math.min(i + chunkSize, matchData.ticks.length) / 60);
         
+        // 左右のイベントテキストを逆転して表示
         const rowHTML = `
           <div class="tl-row">
             <div class="tl-time">${startMin}分 〜 ${endMin}分</div>
@@ -365,8 +414,8 @@
               <div class="tl-bar-r" style="width: ${rPct}%;"></div>
             </div>
             <div class="tl-stats">
-              <span>左 S:${lS} L:${lL} T:${lT}</span>
               <span>右 S:${rS} L:${rL} T:${rT}</span>
+              <span>左 S:${lS} L:${lL} T:${lT}</span>
             </div>
           </div>
         `;
@@ -375,13 +424,62 @@
       if (matchData.ticks.length === 0) container.innerHTML = '<p>データがありません</p>';
     }
 
-    // --- 8. 全てリセット ---
+    // --- CSV書き出し処理 ---
+    document.getElementById('btnExportCSV').addEventListener('click', () => {
+      // 文字化け防止用のBOMを付与
+      let csvStr = "\uFEFF時間(分),左陣(%),中断(%),右陣(%),左S,左L,左T,左C,左P,左D,右S,右L,右T,右C,右P,右D\n";
+      const chunkSize = 120;
+
+      for (let i = 0; i < matchData.ticks.length; i += chunkSize) {
+        const chunk = matchData.ticks.slice(i, i + chunkSize);
+        let l=0, p=0, r=0;
+        chunk.forEach(t => { if(t==='L') l++; else if(t==='R') r++; else p++; });
+        
+        const tot = chunk.length;
+        const lPct = Math.round((l/tot)*100), pPct = Math.round((p/tot)*100), rPct = Math.round((r/tot)*100);
+
+        const cEvs = matchData.events.filter(e => e.time >= i && e.time < i + chunkSize);
+        let lCounts = {S:0, L:0, T:0, C:0, P:0, D:0};
+        let rCounts = {S:0, L:0, T:0, C:0, P:0, D:0};
+        
+        cEvs.forEach(e => {
+          if (e.team === 'L') lCounts[e.type]++; else rCounts[e.type]++;
+        });
+
+        const startMin = Math.floor(i / 60);
+        const endMin = Math.floor(Math.min(i + chunkSize, matchData.ticks.length) / 60);
+        const timeLabel = `${startMin}〜${endMin}`;
+
+        csvStr += `${timeLabel},${lPct},${pPct},${rPct},${lCounts.S},${lCounts.L},${lCounts.T},${lCounts.C},${lCounts.P},${lCounts.D},${rCounts.S},${rCounts.L},${rCounts.T},${rCounts.C},${rCounts.P},${rCounts.D}\n`;
+      }
+
+      const blob = new Blob([csvStr], { type: 'text/csv' });
+      const filename = `rugby_data_${Date.now()}.csv`;
+
+      // CSVファイルもOSの共有メニューへ渡す
+      if (navigator.canShare) {
+        const file = new File([blob], filename, { type: 'text/csv' });
+        if (navigator.canShare({ files: [file] })) {
+          navigator.share({ files: [file], title: filename }).catch(console.error);
+          return;
+        }
+      }
+      
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // --- 全てリセット ---
     document.getElementById('btnResetAll').addEventListener('click', () => {
       if(confirm('記録データをすべて削除してリセットしますか？')) {
         clearInterval(globalTimer);
         matchData = { ticks: [], events: [] };
         saveData();
-        location.reload(); // 画面を初期状態に戻すための最善策
+        location.reload(); 
       }
     });
 
