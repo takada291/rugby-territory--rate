@@ -3,183 +3,306 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>テリトリー率 v0.5</title>
+  <title>🏉 テリトリー率 v0.6</title>
   <link rel="manifest" href="manifest.json">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <style>
-    body { font-family: sans-serif; margin: 0; padding: 10px; background: #f0f0f0; touch-action: manipulation; }
-    h1 { font-size: 1.1rem; margin: 0 0 10px; text-align: center; color: #333; }
-    #clockDisplay { font-weight: normal; font-size: 0.9rem; margin-left: 10px; }
+    body { font-family: sans-serif; margin: 0; padding: 10px; background: #f0f0f0; touch-action: manipulation; color: #333; }
+    h1 { font-size: 1.1rem; margin: 0 0 10px; text-align: center; }
+    .clock-display { font-weight: normal; font-size: 0.9rem; margin-left: 10px; color: #666; }
     
-    .view-container { display: none; flex-direction: column; align-items: center; width: 100%; max-width: 450px; margin: 0 auto; }
+    .view-container { display: none; flex-direction: column; align-items: center; width: 100%; max-width: 500px; margin: 0 auto; }
     .active-view { display: flex; }
 
-    /* カメラ領域の上下を少し狭める（16:9に変更） */
-    .camera-container { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; border: 1px solid #333; }
-    video { width: 100%; height: 100%; object-fit: cover; }
-    canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
-    
-    .row { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; }
-    button { padding: 10px; font-size: 0.95rem; flex: 1; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; background: #e0e0e0; transition: 0.2s; }
-    
-    .btn-capture { background: #ff9800; color: white; font-size: 0.85rem; }
-    .btn-primary { background: #1976d2; color: white; }
-    .btn-play { background: #2e7d32; color: white; }
-    .btn-pause { background: #d32f2f; color: white; }
-    .btn-action { background: #607d8b; color: white; margin-top: 15px; }
-    .btn-danger { background: #757575; color: white; }
-    
-    /* グレーアウト用のクラス */
-    .btn-disabled { background: #bdbdbd !important; color: #757575 !important; pointer-events: none; }
-    
-    .status-badge { padding: 5px 10px; border-radius: 15px; font-size: 0.8rem; font-weight: bold; background: #ffcc00; color: #333; }
-    .status-done { background: #4caf50; color: white; }
-    
-    /* イベント記録テーブル */
-    .event-table { width: 100%; background: white; margin-top: 10px; border-collapse: collapse; border-radius: 8px; overflow: hidden; font-size: 0.9rem; text-align: center; }
-    .event-table th { background: #eee; padding: 8px 4px; font-size: 0.8rem; }
-    .event-table td { border-bottom: 1px solid #eee; padding: 5px 2px; vertical-align: middle; }
-    .event-counter { display: flex; justify-content: center; align-items: center; gap: 5px; }
-    .event-counter button { flex: none; width: 30px; height: 30px; padding: 0; background: #f5f5f5; border: 1px solid #ccc; font-size: 1.2rem; color: #333; }
-    .event-counter span { display: inline-block; width: 20px; font-weight: bold; }
-    .ev-label { font-weight: bold; font-size: 1rem; color: #424242; }
+    /* 設定エリア（ハーフ選択・チーム名） */
+    .config-panel { width: 100%; background: white; padding: 10px; border-radius: 8px; margin-bottom: 15px; box-sizing: border-box; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .radio-group { display: flex; gap: 20px; justify-content: center; margin-bottom: 10px; font-weight: bold; }
+    .radio-group label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+    .team-inputs { display: flex; justify-content: space-between; gap: 10px; }
+    .team-input-box { flex: 1; display: flex; flex-direction: column; font-size: 0.85rem; color: #555; }
+    .team-input-box input { padding: 8px; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px; margin-top: 4px; font-weight: bold; text-align: center; }
 
-    /* タイムライン画面 */
-    .timeline-header { width: 100%; text-align: center; background: white; padding: 10px; border-radius: 8px; margin-bottom: 10px; box-sizing: border-box; }
-    .avg-rates { display: flex; justify-content: space-around; font-size: 1.2rem; font-weight: bold; margin-top: 5px; }
-    .avg-rates .l-rate { color: #1976d2; }
-    .avg-rates .r-rate { color: #d32f2f; }
-    
-    .timeline-list { width: 100%; display: flex; flex-direction: column; gap: 15px; background: white; padding: 15px; border-radius: 8px; box-sizing: border-box; }
-    .tl-row { display: flex; flex-direction: column; gap: 5px; border-bottom: 1px dashed #ccc; padding-bottom: 10px; }
-    .tl-time { font-size: 0.8rem; font-weight: bold; color: #555; }
-    .tl-bar-container { width: 100%; height: 20px; background: #eee; display: flex; border-radius: 3px; overflow: hidden; }
-    .tl-bar-l { background: #1976d2; height: 100%; }
-    .tl-bar-p { background: #9e9e9e; height: 100%; }
-    .tl-bar-r { background: #d32f2f; height: 100%; }
-    .tl-stats { display: flex; justify-content: space-between; font-size: 0.75rem; color: #333; }
-    .tl-legend { display: flex; gap: 10px; font-size: 0.75rem; justify-content: center; margin-bottom: 10px; }
-    .leg-item span { display: inline-block; width: 10px; height: 10px; margin-right: 3px; }
+    /* テリトリーボタン */
+    .territory-controls { width: 100%; display: flex; justify-content: space-between; gap: 10px; margin-bottom: 15px; }
+    .btn-territory { flex: 1; height: 100px; font-size: 1.2rem; font-weight: bold; border: 2px solid #bdbdbd; border-radius: 10px; background: #e0e0e0; color: #757575; cursor: pointer; transition: 0.1s; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .btn-territory span { font-size: 0.85rem; font-weight: normal; margin-top: 5px; }
+    .btn-territory.active-l { background: #1976d2; border-color: #0d47a1; color: white; box-shadow: inset 0 0 10px rgba(0,0,0,0.3); }
+    .btn-territory.active-r { background: #d32f2f; border-color: #b71c1c; color: white; box-shadow: inset 0 0 10px rgba(0,0,0,0.3); }
+
+    /* イベントテーブル */
+    .event-table { width: 100%; background: white; border-collapse: collapse; border-radius: 8px; overflow: hidden; font-size: 0.9rem; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 15px; }
+    .event-table th { background: #eee; padding: 10px 4px; font-size: 0.85rem; }
+    .event-table td { border-bottom: 1px solid #eee; padding: 6px 2px; vertical-align: middle; }
+    .event-counter { display: flex; justify-content: center; align-items: center; gap: 5px; }
+    .event-counter button { flex: none; width: 32px; height: 32px; background: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; font-size: 1.2rem; font-weight: bold; color: #333; cursor: pointer; }
+    .event-counter button:active { background: #e0e0e0; }
+    .event-counter span { display: inline-block; width: 20px; font-weight: bold; font-size: 1.1rem; }
+    .ev-label { font-weight: bold; font-size: 0.85rem; color: #424242; }
+
+    /* アクションボタン */
+    .btn-action { width: 100%; padding: 15px; font-size: 1rem; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; color: white; background: #607d8b; margin-bottom: 10px; }
+    .btn-primary { background: #1976d2; }
+    .btn-danger { background: #757575; }
+
+    /* 集計画面用テーブル */
+    .summary-section { width: 100%; background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; box-sizing: border-box; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .summary-title { font-size: 1rem; font-weight: bold; border-bottom: 2px solid #eee; padding-bottom: 5px; margin-bottom: 10px; display: flex; align-items: center; gap: 5px; }
+    .summary-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; text-align: center; }
+    .summary-table th, .summary-table td { padding: 8px 4px; border-bottom: 1px dashed #eee; }
+    .summary-table th { color: #666; font-weight: normal; }
+    .t-rate-l { color: #1976d2; font-weight: bold; }
+    .t-rate-r { color: #d32f2f; font-weight: bold; }
+    .t-rate-p { color: #9e9e9e; font-weight: bold; }
   </style>
 </head>
 <body>
 
-  <!-- タイトルの横に時計を配置 -->
-  <h1>テリトリー率 v0.5<span id="clockDisplay"></span></h1>
+  <!-- 共通ヘッダー -->
+  <h1 id="mainTitle">🏉 テリトリー率 v0.6<span class="clock-display" id="clockDisplay"></span></h1>
 
   <!-- メイン画面 -->
   <div id="mainView" class="view-container active-view">
     
-    <div class="camera-container" id="captureArea">
-      <video id="video" autoplay playsinline muted></video>
-      <canvas id="arCanvas"></canvas>
+    <!-- 設定パネル -->
+    <div class="config-panel">
+      <div class="radio-group">
+        <label><input type="radio" name="halfRadio" value="first" checked> 前半</label>
+        <label><input type="radio" name="halfRadio" value="second"> 後半</label>
+      </div>
+      <div class="team-inputs">
+        <div class="team-input-box">
+          左サイド
+          <input type="text" id="inputLeft" value="シラエビ">
+        </div>
+        <div class="team-input-box">
+          右サイド
+          <input type="text" id="inputRight" value="ズワイガニ">
+        </div>
+      </div>
     </div>
 
-    <div class="row">
-      <button id="btnPhoto" class="btn-capture">📷 カメラ</button>
-      <button id="btnScreenshotMain" class="btn-capture">📸 スクショ</button>
+    <!-- 手動テリトリーボタン -->
+    <div class="territory-controls">
+      <button id="btnTerritoryL" class="btn-territory" onclick="toggleTerritory('L')">
+        ◁ 左サイド<br><span id="lblBtnL">シラエビ</span>
+      </button>
+      <button id="btnTerritoryR" class="btn-territory" onclick="toggleTerritory('R')">
+        ▷ 右サイド<br><span id="lblBtnR">ズワイガニ</span>
+      </button>
     </div>
 
-    <div class="row">
-      <button id="btnSetBase" class="btn-primary">基準角設定</button>
-      <span id="statusBadge" class="status-badge">未</span>
-    </div>
-
-    <div class="row">
-      <button id="btnPlay" class="btn-play">▷ 実行</button>
-      <!-- 初期状態では一時停止ボタンをグレーアウト -->
-      <button id="btnPause" class="btn-pause btn-disabled">|| 一時停止</button>
-    </div>
-
+    <!-- イベントテーブル -->
     <table class="event-table">
-      <!-- カテゴリをイベントに変更 -->
-      <thead><tr><th>左チーム</th><th>イベント</th><th>右チーム</th></tr></thead>
+      <thead>
+        <tr>
+          <th id="thLeft">シラエビ (左)</th>
+          <th>イベント</th>
+          <th id="thRight">ズワイガニ (右)</th>
+        </tr>
+      </thead>
       <tbody id="eventTbody">
         <!-- JSで生成 -->
       </tbody>
     </table>
 
-    <button id="btnFinishHalf" class="btn-action" style="width: 100%;">前半または後半終了 → データをグラフ化</button>
+    <button class="btn-action btn-primary" onclick="goToSummary()">試合終了後、データ集計へ</button>
   </div>
 
-  <!-- タイムライン画面 -->
-  <div id="timelineView" class="view-container">
+
+  <!-- 集計画面 -->
+  <div id="summaryView" class="view-container">
     
-    <div class="timeline-header">
-      <div style="font-size: 0.9rem; color: #666;">全体平均テリトリー率</div>
-      <div class="avg-rates" id="avgRatesDisplay">
-        <!-- JSで平均値を挿入 -->
-      </div>
+    <!-- スコア集計 -->
+    <div class="summary-section">
+      <div class="summary-title">◎ スコア</div>
+      <table class="summary-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th id="scoreTeamA">チームA</th>
+            <th id="scoreTeamB">チームB</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>前半</td><td id="scA_1">0点</td><td id="scB_1">0点</td></tr>
+          <tr><td>後半</td><td id="scA_2">0点</td><td id="scB_2">0点</td></tr>
+          <tr style="font-weight:bold; background:#f9f9f9;"><td>合計</td><td id="scA_tot">0点</td><td id="scB_tot">0点</td></tr>
+        </tbody>
+      </table>
     </div>
 
-    <div class="tl-legend">
-      <div class="leg-item"><span style="background:#1976d2;"></span>左陣</div>
-      <div class="leg-item"><span style="background:#9e9e9e;"></span>中断</div>
-      <div class="leg-item"><span style="background:#d32f2f;"></span>右陣</div>
+    <!-- テリトリー集計 -->
+    <div class="summary-section">
+      <div class="summary-title">◎ テリトリー率</div>
+      <table class="summary-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th>左サイド</th>
+            <th>中断</th>
+            <th>右サイド</th>
+            <th style="font-size:0.75rem;">(自陣 左)</th>
+            <th style="font-size:0.75rem;">(自陣 右)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>前半</td>
+            <td id="trL_1" class="t-rate-l">0%</td><td id="trP_1" class="t-rate-p">0%</td><td id="trR_1" class="t-rate-r">0%</td>
+            <td id="trTeamL_1" style="font-size:0.7rem;">-</td><td id="trTeamR_1" style="font-size:0.7rem;">-</td>
+          </tr>
+          <tr>
+            <td>後半</td>
+            <td id="trL_2" class="t-rate-l">0%</td><td id="trP_2" class="t-rate-p">0%</td><td id="trR_2" class="t-rate-r">0%</td>
+            <td id="trTeamL_2" style="font-size:0.7rem;">-</td><td id="trTeamR_2" style="font-size:0.7rem;">-</td>
+          </tr>
+          <tr style="background:#f9f9f9;">
+            <td>合計</td>
+            <td id="trL_tot" class="t-rate-l">0%</td><td id="trP_tot" class="t-rate-p">0%</td><td id="trR_tot" class="t-rate-r">0%</td>
+            <td>-</td><td>-</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
-    <div id="timelineContainer" class="timeline-list">
-      <!-- JSでグラフ行を生成 -->
-    </div>
-
-    <!-- 各種アクションボタン -->
-    <div class="row" style="margin-top: 20px;">
-      <button id="btnScreenshotTimeline" class="btn-capture">📸 スクショ</button>
-    </div>
-    <div class="row">
-      <button id="btnBackToMain" class="btn-primary">メイン画面へ戻る</button>
-    </div>
-    <div class="row">
-      <button id="btnExportCSV" class="btn-action">📄 CSV書き出し</button>
-    </div>
-    <div class="row">
-      <button id="btnResetAll" class="btn-danger">すべてリセット</button>
-    </div>
+    <button class="btn-action" onclick="goToMain()">メイン画面へ戻る</button>
+    <button class="btn-action btn-primary" onclick="exportCSV()">📄 データ書き出し(CSV)</button>
+    <button class="btn-action btn-danger" onclick="resetAll()">すべてリセット</button>
   </div>
 
   <script>
-    // --- 時計表示 ---
+    // --- 1. 時計表示 ---
     function updateClock() {
       const now = new Date();
+      const yy = String(now.getFullYear()).slice(-2);
       const MM = String(now.getMonth() + 1).padStart(2, '0');
       const dd = String(now.getDate()).padStart(2, '0');
       const hh = String(now.getHours()).padStart(2, '0');
       const mm = String(now.getMinutes()).padStart(2, '0');
-      document.getElementById('clockDisplay').textContent = ` ${MM}/${dd} ${hh}:${mm}`;
+      document.getElementById('clockDisplay').textContent = ` ${yy}/${MM}/${dd} ${hh}:${mm}`;
     }
     setInterval(updateClock, 1000);
     updateClock();
 
-    // --- データ構造とストレージ ---
-    let matchData = { ticks: [], events: [] };
+    // --- 2. データ構造とストレージ ---
+    // teams.A が「前半の左サイド」、teams.B が「前半の右サイド」を基準とする
+    let matchData = {
+      teams: { A: "シラエビ", B: "ズワイガニ" },
+      ticks: { first: [], second: [] },
+      events: [] // { id, half, side, team, type }
+    };
+    let currentHalf = 'first'; // 'first' or 'second'
+    
+    // タイマー・テリトリー状態
+    let currentState = 'P'; // L, R, P (Pause)
+    let globalTimer = null;
+
     function loadData() {
-      const saved = localStorage.getItem('rugby_data_v5');
-      if (saved) matchData = JSON.parse(saved);
+      const saved = localStorage.getItem('rugby_data_v6');
+      if (saved) {
+        matchData = JSON.parse(saved);
+        updateUIFromData();
+      }
     }
     function saveData() {
-      localStorage.setItem('rugby_data_v5', JSON.stringify(matchData));
+      localStorage.setItem('rugby_data_v6', JSON.stringify(matchData));
     }
-    loadData();
 
-    // --- イベントUIの生成 ---
-    const evTypes = ['S', 'L', 'T', 'C', 'P', 'D'];
+    // --- 3. UIと設定連動 ---
+    const evTypes = ['スクラム', 'ラインアウト', 'トライ', 'コンバージョンG', 'ペナルティG', 'ドロップG'];
     const tbody = document.getElementById('eventTbody');
-    evTypes.forEach(type => {
+    evTypes.forEach((type, idx) => {
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td><div class="event-counter"><button onclick="modEvent('L','${type}',-1)">-</button><span id="cnt-L-${type}">0</span><button onclick="modEvent('L','${type}',1)">+</button></div></td>
+        <td><div class="event-counter"><button onclick="modEvent('L','${type}',-1)">-</button><span id="cnt-L-${idx}">0</span><button onclick="modEvent('L','${type}',1)">+</button></div></td>
         <td class="ev-label">${type}</td>
-        <td><div class="event-counter"><button onclick="modEvent('R','${type}',-1)">-</button><span id="cnt-R-${type}">0</span><button onclick="modEvent('R','${type}',1)">+</button></div></td>
+        <td><div class="event-counter"><button onclick="modEvent('R','${type}',-1)">-</button><span id="cnt-R-${idx}">0</span><button onclick="modEvent('R','${type}',1)">+</button></div></td>
       `;
       tbody.appendChild(tr);
     });
 
-    function modEvent(team, type, delta) {
-      if (delta > 0) {
-        matchData.events.push({ team, type, time: matchData.ticks.length });
+    // ラジオボタンの切り替え
+    document.querySelectorAll('input[name="halfRadio"]').forEach(radio => {
+      radio.addEventListener('change', (e) => {
+        currentHalf = e.target.value;
+        // ハーフが切り替わったら記録を一時停止（グレーアウト）状態に戻す
+        currentState = 'P';
+        updateTerritoryBtnStyle();
+        updateUIFromData();
+      });
+    });
+
+    // チーム名入力の監視（入力されたら即時保存＆反映）
+    document.getElementById('inputLeft').addEventListener('input', (e) => {
+      if (currentHalf === 'first') matchData.teams.A = e.target.value;
+      else matchData.teams.B = e.target.value;
+      saveData();
+      updateLabelsOnly();
+    });
+    document.getElementById('inputRight').addEventListener('input', (e) => {
+      if (currentHalf === 'first') matchData.teams.B = e.target.value;
+      else matchData.teams.A = e.target.value;
+      saveData();
+      updateLabelsOnly();
+    });
+
+    function updateUIFromData() {
+      document.querySelector(`input[name="halfRadio"][value="${currentHalf}"]`).checked = true;
+      updateLabelsOnly();
+      renderEventCounts();
+    }
+
+    function updateLabelsOnly() {
+      const leftName = currentHalf === 'first' ? matchData.teams.A : matchData.teams.B;
+      const rightName = currentHalf === 'first' ? matchData.teams.B : matchData.teams.A;
+      
+      document.getElementById('inputLeft').value = leftName;
+      document.getElementById('inputRight').value = rightName;
+      
+      document.getElementById('lblBtnL').textContent = leftName;
+      document.getElementById('lblBtnR').textContent = rightName;
+      
+      document.getElementById('thLeft').textContent = `${leftName} (左)`;
+      document.getElementById('thRight').textContent = `${rightName} (右)`;
+    }
+
+    // --- 4. テリトリー手動記録ロジック ---
+    function toggleTerritory(side) {
+      if (currentState === side) {
+        currentState = 'P'; // もう一度押すと中断（グレー）
       } else {
+        currentState = side;
+      }
+      updateTerritoryBtnStyle();
+
+      if (!globalTimer) {
+        globalTimer = setInterval(tickSecond, 1000);
+      }
+    }
+
+    function updateTerritoryBtnStyle() {
+      const btnL = document.getElementById('btnTerritoryL');
+      const btnR = document.getElementById('btnTerritoryR');
+      btnL.className = 'btn-territory' + (currentState === 'L' ? ' active-l' : '');
+      btnR.className = 'btn-territory' + (currentState === 'R' ? ' active-r' : '');
+    }
+
+    function tickSecond() {
+      matchData.ticks[currentHalf].push(currentState);
+      saveData();
+    }
+
+    // --- 5. イベント記録ロジック ---
+    function modEvent(side, type, delta) {
+      const teamName = side === 'L' ? 
+        (currentHalf === 'first' ? matchData.teams.A : matchData.teams.B) : 
+        (currentHalf === 'first' ? matchData.teams.B : matchData.teams.A);
+
+      if (delta > 0) {
+        matchData.events.push({ id: Date.now(), half: currentHalf, side: side, team: teamName, type: type });
+      } else {
+        // 直近の同条件イベントを1つ削除
         for (let i = matchData.events.length - 1; i >= 0; i--) {
-          if (matchData.events[i].team === team && matchData.events[i].type === type) {
+          if (matchData.events[i].half === currentHalf && matchData.events[i].side === side && matchData.events[i].type === type) {
             matchData.events.splice(i, 1);
             break;
           }
@@ -190,273 +313,137 @@
     }
 
     function renderEventCounts() {
-      const counts = { L: {}, R: {} };
-      evTypes.forEach(t => { counts.L[t] = 0; counts.R[t] = 0; });
-      matchData.events.forEach(e => { if(counts[e.team] && counts[e.team][e.type] !== undefined) counts[e.team][e.type]++; });
-      evTypes.forEach(t => {
-        document.getElementById(`cnt-L-${t}`).textContent = counts.L[t];
-        document.getElementById(`cnt-R-${t}`).textContent = counts.R[t];
+      // 現在のハーフの表示用カウントを集計
+      let countsL = [0,0,0,0,0,0];
+      let countsR = [0,0,0,0,0,0];
+      
+      const currentHalfEvents = matchData.events.filter(e => e.half === currentHalf);
+      currentHalfEvents.forEach(e => {
+        const idx = evTypes.indexOf(e.type);
+        if (idx !== -1) {
+          if (e.side === 'L') countsL[idx]++;
+          if (e.side === 'R') countsR[idx]++;
+        }
+      });
+
+      evTypes.forEach((_, idx) => {
+        document.getElementById(`cnt-L-${idx}`).textContent = countsL[idx];
+        document.getElementById(`cnt-R-${idx}`).textContent = countsR[idx];
       });
     }
-    renderEventCounts();
 
-    // --- センサー＆タイマーロジック ---
-    const video = document.getElementById('video');
-    const arCanvas = document.getElementById('arCanvas');
-    const ctx = arCanvas.getContext('2d');
-    
-    let baseAngle = null;
-    let currentAlpha = null;
-    let isRunning = false;
-    let hasStarted = false;
-    let globalTimer = null;
-    let isWaitingForBase = false;
-    let smoothedX = 0, smoothedY = 0, isFirstReading = true;
-    const FILTER_COEF = 0.15;
-
-    const btnPlay = document.getElementById('btnPlay');
-    const btnPause = document.getElementById('btnPause');
-
-    async function initCamera() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        video.srcObject = stream;
-        video.onloadedmetadata = () => { arCanvas.width = video.clientWidth; arCanvas.height = video.clientHeight; };
-      } catch (err) { alert("カメラ起動エラー: " + err.message); }
-    }
-    initCamera();
-
-    function handleOrientation(e) {
-      let rawAlpha = null;
-      if (e.webkitCompassHeading !== undefined) rawAlpha = e.webkitCompassHeading;
-      else if (e.alpha !== null) rawAlpha = (360 - e.alpha) % 360;
-
-      if (rawAlpha !== null) {
-        const rad = rawAlpha * (Math.PI / 180);
-        const curX = Math.cos(rad), curY = Math.sin(rad);
-        if (isFirstReading) { smoothedX = curX; smoothedY = curY; isFirstReading = false; }
-        else { smoothedX = (curX * FILTER_COEF) + (smoothedX * (1 - FILTER_COEF)); smoothedY = (curY * FILTER_COEF) + (smoothedY * (1 - FILTER_COEF)); }
-        
-        let smoothedAlpha = Math.atan2(smoothedY, smoothedX) * (180 / Math.PI);
-        if (smoothedAlpha < 0) smoothedAlpha += 360;
-        currentAlpha = smoothedAlpha;
-
-        if (isWaitingForBase) {
-          baseAngle = currentAlpha;
-          isWaitingForBase = false;
-          document.getElementById('statusBadge').textContent = "済";
-          document.getElementById('statusBadge').className = "status-badge status-done";
-        }
-        drawAR();
-      }
-    }
-
-    document.getElementById('btnSetBase').addEventListener('click', () => {
-      if (video.paused) video.play().catch(()=>{});
-      if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-        DeviceOrientationEvent.requestPermission().then(p => {
-          if(p === 'granted') { window.addEventListener('deviceorientation', handleOrientation); isWaitingForBase = true; isFirstReading = true; }
-        }).catch(console.error);
-      } else {
-        window.addEventListener('deviceorientation', handleOrientation);
-        isWaitingForBase = true; isFirstReading = true;
-      }
-    });
-
-    function drawAR() {
-      ctx.clearRect(0, 0, arCanvas.width, arCanvas.height);
-      if (baseAngle === null || currentAlpha === null) return;
-      let diff = currentAlpha - baseAngle;
-      if (diff > 180) diff -= 360; if (diff < -180) diff += 360;
-      const pxPerDegree = arCanvas.width / 60;
-      const lineX = (arCanvas.width / 2) - (diff * pxPerDegree);
-      if (lineX >= 0 && lineX <= arCanvas.width) {
-        ctx.beginPath(); ctx.moveTo(lineX, 0); ctx.lineTo(lineX, arCanvas.height);
-        ctx.strokeStyle = 'red'; ctx.lineWidth = 3; ctx.stroke();
-      }
-    }
-
-    // 実行ボタン
-    btnPlay.addEventListener('click', () => {
-      if (baseAngle === null) { alert("基準角を設定してください"); return; }
-      isRunning = true;
+    // --- 6. 集計画面への遷移と計算 ---
+    function goToSummary() {
+      // タイトル変更
+      document.getElementById('mainTitle').innerHTML = `🏉 データ集計<span class="clock-display">${document.getElementById('clockDisplay').textContent}</span>`;
       
-      // ボタンのグレーアウト切り替え
-      btnPlay.classList.add('btn-disabled');
-      btnPause.classList.remove('btn-disabled');
-
-      if (!hasStarted) {
-        hasStarted = true;
-        globalTimer = setInterval(tickSecond, 1000);
-      }
-    });
-
-    // 一時停止ボタン
-    btnPause.addEventListener('click', () => { 
-      isRunning = false; 
-      
-      // ボタンのグレーアウト切り替え
-      btnPause.classList.add('btn-disabled');
-      btnPlay.classList.remove('btn-disabled');
-    });
-
-    function tickSecond() {
-      let state = 'P'; 
-      if (isRunning && currentAlpha !== null && baseAngle !== null) {
-        let diff = currentAlpha - baseAngle;
-        if (diff > 180) diff -= 360; if (diff < -180) diff += 360;
-        if (Math.abs(diff) > 5) {
-          state = (diff > 5) ? 'R' : 'L';
-        }
-      }
-      matchData.ticks.push(state);
-      saveData();
-    }
-
-    // --- iOS対応の共有・保存処理 ---
-    async function shareOrDownload(canvas, filename) {
-      canvas.toBlob(async (blob) => {
-        if (navigator.canShare) {
-          const file = new File([blob], filename, { type: 'image/jpeg' });
-          if (navigator.canShare({ files: [file] })) {
-            try {
-              await navigator.share({
-                files: [file],
-                title: filename
-              });
-              return; // 成功すればここで終了
-            } catch (err) {
-              console.log('Share canceled', err);
-            }
-          }
-        }
-        // ShareAPIが使えない場合やキャンセルされた場合のフォールバック（強制ダウンロード）
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(url);
-      }, 'image/jpeg', 0.9);
-    }
-
-    document.getElementById('btnPhoto').addEventListener('click', () => {
-      const tmpCanvas = document.createElement('canvas');
-      tmpCanvas.width = video.videoWidth; tmpCanvas.height = video.videoHeight;
-      tmpCanvas.getContext('2d').drawImage(video, 0, 0, tmpCanvas.width, tmpCanvas.height);
-      shareOrDownload(tmpCanvas, `rugby_photo_${Date.now()}.jpg`);
-    });
-
-    document.getElementById('btnScreenshotMain').addEventListener('click', () => {
-      html2canvas(document.getElementById('mainView')).then(c => shareOrDownload(c, `rugby_main_${Date.now()}.jpg`));
-    });
-
-    document.getElementById('btnScreenshotTimeline').addEventListener('click', () => {
-      html2canvas(document.getElementById('timelineView')).then(c => shareOrDownload(c, `rugby_timeline_${Date.now()}.jpg`));
-    });
-
-    // --- タイムライン・グラフ化処理 ---
-    document.getElementById('btnFinishHalf').addEventListener('click', () => {
       document.getElementById('mainView').classList.remove('active-view');
-      document.getElementById('timelineView').classList.add('active-view');
-      generateTimeline();
-    });
-
-    // メイン画面へ戻るボタン
-    document.getElementById('btnBackToMain').addEventListener('click', () => {
-      document.getElementById('timelineView').classList.remove('active-view');
-      document.getElementById('mainView').classList.add('active-view');
-    });
-
-    function generateTimeline() {
-      // 1. 全体平均テリトリー率の計算
-      let totalL = 0, totalR = 0;
-      matchData.ticks.forEach(t => { if(t==='L') totalL++; if(t==='R') totalR++; });
-      const overallTotal = totalL + totalR;
-      const displayL = overallTotal > 0 ? Math.round((totalL / overallTotal) * 100) : 0;
-      const displayR = overallTotal > 0 ? Math.round((totalR / overallTotal) * 100) : 0;
-      
-      document.getElementById('avgRatesDisplay').innerHTML = `
-        <div class="l-rate">左陣 ${displayL}%</div>
-        <div class="r-rate">右陣 ${displayR}%</div>
-      `;
-
-      // 2. タイムライン生成
-      const container = document.getElementById('timelineContainer');
-      container.innerHTML = '';
-      const chunkSize = 120; // 2分 = 120秒
-
-      for (let i = 0; i < matchData.ticks.length; i += chunkSize) {
-        const chunk = matchData.ticks.slice(i, i + chunkSize);
-        let l=0, p=0, r=0;
-        chunk.forEach(t => { if(t==='L') l++; else if(t==='R') r++; else p++; });
-        
-        const tot = chunk.length;
-        const lPct = (l/tot)*100, pPct = (p/tot)*100, rPct = (r/tot)*100;
-
-        const cEvs = matchData.events.filter(e => e.time >= i && e.time < i + chunkSize);
-        let lS=0, lL=0, lT=0, rS=0, rL=0, rT=0;
-        cEvs.forEach(e => {
-          if (e.team === 'L') { if(e.type==='S') lS++; if(e.type==='L') lL++; if(e.type==='T') lT++; }
-          else { if(e.type==='S') rS++; if(e.type==='L') rL++; if(e.type==='T') rT++; }
-        });
-
-        const startMin = Math.floor(i / 60);
-        const endMin = Math.floor(Math.min(i + chunkSize, matchData.ticks.length) / 60);
-        
-        // 左右のイベントテキストを逆転して表示
-        const rowHTML = `
-          <div class="tl-row">
-            <div class="tl-time">${startMin}分 〜 ${endMin}分</div>
-            <div class="tl-bar-container">
-              <div class="tl-bar-l" style="width: ${lPct}%;"></div>
-              <div class="tl-bar-p" style="width: ${pPct}%;"></div>
-              <div class="tl-bar-r" style="width: ${rPct}%;"></div>
-            </div>
-            <div class="tl-stats">
-              <span>右 S:${rS} L:${rL} T:${rT}</span>
-              <span>左 S:${lS} L:${lL} T:${lT}</span>
-            </div>
-          </div>
-        `;
-        container.insertAdjacentHTML('beforeend', rowHTML);
-      }
-      if (matchData.ticks.length === 0) container.innerHTML = '<p>データがありません</p>';
+      document.getElementById('summaryView').classList.add('active-view');
+      generateSummary();
     }
 
-    // --- CSV書き出し処理 ---
-    document.getElementById('btnExportCSV').addEventListener('click', () => {
-      // 文字化け防止用のBOMを付与
-      let csvStr = "\uFEFF時間(分),左陣(%),中断(%),右陣(%),左S,左L,左T,左C,左P,左D,右S,右L,右T,右C,右P,右D\n";
-      const chunkSize = 120;
+    function goToMain() {
+      document.getElementById('mainTitle').innerHTML = `🏉 テリトリー率 v0.6<span class="clock-display">${document.getElementById('clockDisplay').textContent}</span>`;
+      document.getElementById('summaryView').classList.remove('active-view');
+      document.getElementById('mainView').classList.add('active-view');
+    }
 
-      for (let i = 0; i < matchData.ticks.length; i += chunkSize) {
-        const chunk = matchData.ticks.slice(i, i + chunkSize);
-        let l=0, p=0, r=0;
-        chunk.forEach(t => { if(t==='L') l++; else if(t==='R') r++; else p++; });
-        
-        const tot = chunk.length;
-        const lPct = Math.round((l/tot)*100), pPct = Math.round((p/tot)*100), rPct = Math.round((r/tot)*100);
+    function calcScore(teamName, halfStr) {
+      let score = 0;
+      const evs = matchData.events.filter(e => e.team === teamName && (halfStr === 'all' || e.half === halfStr));
+      evs.forEach(e => {
+        if(e.type === 'トライ') score += 5;
+        if(e.type === 'コンバージョンG') score += 2;
+        if(e.type === 'ペナルティG') score += 3;
+        if(e.type === 'ドロップG') score += 3;
+      });
+      return score;
+    }
 
-        const cEvs = matchData.events.filter(e => e.time >= i && e.time < i + chunkSize);
-        let lCounts = {S:0, L:0, T:0, C:0, P:0, D:0};
-        let rCounts = {S:0, L:0, T:0, C:0, P:0, D:0};
-        
-        cEvs.forEach(e => {
-          if (e.team === 'L') lCounts[e.type]++; else rCounts[e.type]++;
+    function calcTerritory(halfStr) {
+      let ticks = halfStr === 'all' ? matchData.ticks.first.concat(matchData.ticks.second) : matchData.ticks[halfStr];
+      let l=0, p=0, r=0;
+      ticks.forEach(t => { if(t==='L') l++; else if(t==='R') r++; else p++; });
+      const tot = ticks.length;
+      if (tot === 0) return { L: 0, P: 0, R: 0 };
+      return { L: Math.round((l/tot)*100), P: Math.round((p/tot)*100), R: Math.round((r/tot)*100) };
+    }
+
+    function generateSummary() {
+      const tA = matchData.teams.A;
+      const tB = matchData.teams.B;
+      
+      // スコア計算
+      document.getElementById('scoreTeamA').textContent = tA;
+      document.getElementById('scoreTeamB').textContent = tB;
+      
+      const scA1 = calcScore(tA, 'first'), scB1 = calcScore(tB, 'first');
+      const scA2 = calcScore(tA, 'second'), scB2 = calcScore(tB, 'second');
+      
+      document.getElementById('scA_1').textContent = scA1 + "点";
+      document.getElementById('scB_1').textContent = scB1 + "点";
+      document.getElementById('scA_2').textContent = scA2 + "点";
+      document.getElementById('scB_2').textContent = scB2 + "点";
+      document.getElementById('scA_tot').textContent = (scA1 + scA2) + "点";
+      document.getElementById('scB_tot').textContent = (scB1 + scB2) + "点";
+
+      // テリトリー計算
+      const tr1 = calcTerritory('first');
+      const tr2 = calcTerritory('second');
+      const trTot = calcTerritory('all');
+
+      document.getElementById('trL_1').textContent = tr1.L + "%";
+      document.getElementById('trP_1').textContent = tr1.P + "%";
+      document.getElementById('trR_1').textContent = tr1.R + "%";
+      document.getElementById('trTeamL_1').textContent = tA;
+      document.getElementById('trTeamR_1').textContent = tB;
+
+      document.getElementById('trL_2').textContent = tr2.L + "%";
+      document.getElementById('trP_2').textContent = tr2.P + "%";
+      document.getElementById('trR_2').textContent = tr2.R + "%";
+      document.getElementById('trTeamL_2').textContent = tB;
+      document.getElementById('trTeamR_2').textContent = tA;
+
+      document.getElementById('trL_tot').textContent = trTot.L + "%";
+      document.getElementById('trP_tot').textContent = trTot.P + "%";
+      document.getElementById('trR_tot').textContent = trTot.R + "%";
+    }
+
+    // --- 7. CSV出力とリセット ---
+    function exportCSV() {
+      const tA = matchData.teams.A;
+      const tB = matchData.teams.B;
+      let csv = "\uFEFF"; // BOM
+      
+      csv += "【スコア集計】\n";
+      csv += `チーム,前半,後半,合計\n`;
+      csv += `${tA},${calcScore(tA,'first')},${calcScore(tA,'second')},${calcScore(tA,'all')}\n`;
+      csv += `${tB},${calcScore(tB,'first')},${calcScore(tB,'second')},${calcScore(tB,'all')}\n\n`;
+
+      csv += "【テリトリー率】\n";
+      csv += `ハーフ,左サイド(%),中断(%),右サイド(%),(左チーム),(右チーム)\n`;
+      const tr1 = calcTerritory('first'), tr2 = calcTerritory('second'), trT = calcTerritory('all');
+      csv += `前半,${tr1.L},${tr1.P},${tr1.R},${tA},${tB}\n`;
+      csv += `後半,${tr2.L},${tr2.P},${tr2.R},${tB},${tA}\n`;
+      csv += `合計,${trT.L},${trT.P},${trT.R},-,-\n\n`;
+
+      csv += "【イベント回数 (チーム別合計)】\n";
+      csv += `チーム,${evTypes.join(',')}\n`;
+      
+      function getEvCounts(teamName) {
+        let cnts = evTypes.map(() => 0);
+        matchData.events.filter(e => e.team === teamName).forEach(e => {
+          const idx = evTypes.indexOf(e.type);
+          if(idx !== -1) cnts[idx]++;
         });
-
-        const startMin = Math.floor(i / 60);
-        const endMin = Math.floor(Math.min(i + chunkSize, matchData.ticks.length) / 60);
-        const timeLabel = `${startMin}〜${endMin}`;
-
-        csvStr += `${timeLabel},${lPct},${pPct},${rPct},${lCounts.S},${lCounts.L},${lCounts.T},${lCounts.C},${lCounts.P},${lCounts.D},${rCounts.S},${rCounts.L},${rCounts.T},${rCounts.C},${rCounts.P},${rCounts.D}\n`;
+        return cnts.join(',');
       }
+      csv += `${tA},${getEvCounts(tA)}\n`;
+      csv += `${tB},${getEvCounts(tB)}\n`;
 
-      const blob = new Blob([csvStr], { type: 'text/csv' });
+      const blob = new Blob([csv], { type: 'text/csv' });
       const filename = `rugby_data_${Date.now()}.csv`;
 
-      // CSVファイルもOSの共有メニューへ渡す
       if (navigator.canShare) {
         const file = new File([blob], filename, { type: 'text/csv' });
         if (navigator.canShare({ files: [file] })) {
@@ -471,18 +458,19 @@
       a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
-    });
+    }
 
-    // --- 全てリセット ---
-    document.getElementById('btnResetAll').addEventListener('click', () => {
-      if(confirm('記録データをすべて削除してリセットしますか？')) {
+    function resetAll() {
+      if(confirm('すべての記録データを削除して初期状態に戻しますか？')) {
         clearInterval(globalTimer);
-        matchData = { ticks: [], events: [] };
-        saveData();
+        localStorage.removeItem('rugby_data_v6');
         location.reload(); 
       }
-    });
+    }
 
+    // 初期化
+    loadData();
+    updateClock();
   </script>
 </body>
 </html>
