@@ -17,9 +17,11 @@
     .config-panel { width: 100%; background: white; padding: 10px; border-radius: 8px; margin-bottom: 15px; box-sizing: border-box; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     .radio-group { display: flex; gap: 20px; justify-content: center; margin-bottom: 10px; font-weight: bold; }
     .radio-group label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
-    .team-inputs { display: flex; justify-content: space-between; gap: 10px; }
-    .team-input-box { flex: 1; display: flex; flex-direction: column; font-size: 0.85rem; color: #555; }
-    .team-input-box input { padding: 8px; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px; margin-top: 4px; font-weight: bold; text-align: center; }
+    
+    /* チーム名入力欄の修正（画面はみ出し防止） */
+    .team-inputs { display: flex; justify-content: space-between; gap: 10px; width: 100%; }
+    .team-input-box { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 0.85rem; color: #555; align-items: center; }
+    .team-input-box input { width: 100%; box-sizing: border-box; padding: 8px; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px; margin-top: 4px; font-weight: bold; text-align: center; }
 
     /* テリトリーボタン */
     .territory-controls { width: 100%; display: flex; justify-content: space-between; gap: 10px; margin-bottom: 15px; }
@@ -56,8 +58,8 @@
 </head>
 <body>
 
-  <!-- 共通ヘッダー -->
-  <h1 id="mainTitle">🏉 テリトリー率 v0.6<span class="clock-display" id="clockDisplay"></span></h1>
+  <!-- 共通ヘッダー（タイトルと時計を分離してエラーを防止） -->
+  <h1><span id="appTitle">🏉 テリトリー率 v0.6</span><span class="clock-display" id="clockDisplay"></span></h1>
 
   <!-- メイン画面 -->
   <div id="mainView" class="view-container active-view">
@@ -70,11 +72,11 @@
       </div>
       <div class="team-inputs">
         <div class="team-input-box">
-          左サイド
+          <span>左サイド</span>
           <input type="text" id="inputLeft" value="シラエビ">
         </div>
         <div class="team-input-box">
-          右サイド
+          <span>右サイド</span>
           <input type="text" id="inputRight" value="ズワイガニ">
         </div>
       </div>
@@ -178,22 +180,23 @@
       const dd = String(now.getDate()).padStart(2, '0');
       const hh = String(now.getHours()).padStart(2, '0');
       const mm = String(now.getMinutes()).padStart(2, '0');
-      document.getElementById('clockDisplay').textContent = ` ${yy}/${MM}/${dd} ${hh}:${mm}`;
+      
+      const clockElem = document.getElementById('clockDisplay');
+      if (clockElem) {
+        clockElem.textContent = ` ${yy}/${MM}/${dd} ${hh}:${mm}`;
+      }
     }
     setInterval(updateClock, 1000);
     updateClock();
 
     // --- 2. データ構造とストレージ ---
-    // teams.A が「前半の左サイド」、teams.B が「前半の右サイド」を基準とする
     let matchData = {
       teams: { A: "シラエビ", B: "ズワイガニ" },
       ticks: { first: [], second: [] },
-      events: [] // { id, half, side, team, type }
+      events: [] 
     };
-    let currentHalf = 'first'; // 'first' or 'second'
-    
-    // タイマー・テリトリー状態
-    let currentState = 'P'; // L, R, P (Pause)
+    let currentHalf = 'first'; 
+    let currentState = 'P'; 
     let globalTimer = null;
 
     function loadData() {
@@ -220,24 +223,22 @@
       tbody.appendChild(tr);
     });
 
-    // ラジオボタンの切り替え
     document.querySelectorAll('input[name="halfRadio"]').forEach(radio => {
       radio.addEventListener('change', (e) => {
         currentHalf = e.target.value;
-        // ハーフが切り替わったら記録を一時停止（グレーアウト）状態に戻す
         currentState = 'P';
         updateTerritoryBtnStyle();
         updateUIFromData();
       });
     });
 
-    // チーム名入力の監視（入力されたら即時保存＆反映）
     document.getElementById('inputLeft').addEventListener('input', (e) => {
       if (currentHalf === 'first') matchData.teams.A = e.target.value;
       else matchData.teams.B = e.target.value;
       saveData();
       updateLabelsOnly();
     });
+    
     document.getElementById('inputRight').addEventListener('input', (e) => {
       if (currentHalf === 'first') matchData.teams.B = e.target.value;
       else matchData.teams.A = e.target.value;
@@ -268,7 +269,7 @@
     // --- 4. テリトリー手動記録ロジック ---
     function toggleTerritory(side) {
       if (currentState === side) {
-        currentState = 'P'; // もう一度押すと中断（グレー）
+        currentState = 'P'; 
       } else {
         currentState = side;
       }
@@ -300,7 +301,6 @@
       if (delta > 0) {
         matchData.events.push({ id: Date.now(), half: currentHalf, side: side, team: teamName, type: type });
       } else {
-        // 直近の同条件イベントを1つ削除
         for (let i = matchData.events.length - 1; i >= 0; i--) {
           if (matchData.events[i].half === currentHalf && matchData.events[i].side === side && matchData.events[i].type === type) {
             matchData.events.splice(i, 1);
@@ -313,7 +313,6 @@
     }
 
     function renderEventCounts() {
-      // 現在のハーフの表示用カウントを集計
       let countsL = [0,0,0,0,0,0];
       let countsR = [0,0,0,0,0,0];
       
@@ -334,16 +333,14 @@
 
     // --- 6. 集計画面への遷移と計算 ---
     function goToSummary() {
-      // タイトル変更
-      document.getElementById('mainTitle').innerHTML = `🏉 データ集計<span class="clock-display">${document.getElementById('clockDisplay').textContent}</span>`;
-      
+      document.getElementById('appTitle').textContent = '🏉 データ集計';
       document.getElementById('mainView').classList.remove('active-view');
       document.getElementById('summaryView').classList.add('active-view');
       generateSummary();
     }
 
     function goToMain() {
-      document.getElementById('mainTitle').innerHTML = `🏉 テリトリー率 v0.6<span class="clock-display">${document.getElementById('clockDisplay').textContent}</span>`;
+      document.getElementById('appTitle').textContent = '🏉 テリトリー率 v0.6';
       document.getElementById('summaryView').classList.remove('active-view');
       document.getElementById('mainView').classList.add('active-view');
     }
@@ -373,7 +370,6 @@
       const tA = matchData.teams.A;
       const tB = matchData.teams.B;
       
-      // スコア計算
       document.getElementById('scoreTeamA').textContent = tA;
       document.getElementById('scoreTeamB').textContent = tB;
       
@@ -387,7 +383,6 @@
       document.getElementById('scA_tot').textContent = (scA1 + scA2) + "点";
       document.getElementById('scB_tot').textContent = (scB1 + scB2) + "点";
 
-      // テリトリー計算
       const tr1 = calcTerritory('first');
       const tr2 = calcTerritory('second');
       const trTot = calcTerritory('all');
@@ -413,7 +408,7 @@
     function exportCSV() {
       const tA = matchData.teams.A;
       const tB = matchData.teams.B;
-      let csv = "\uFEFF"; // BOM
+      let csv = "\uFEFF"; 
       
       csv += "【スコア集計】\n";
       csv += `チーム,前半,後半,合計\n`;
@@ -468,7 +463,6 @@
       }
     }
 
-    // 初期化
     loadData();
     updateClock();
   </script>
