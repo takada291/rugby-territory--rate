@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>🏉 テリトリー率 v0.8</title>
+  <title>🏉 テリトリー率 v1.0</title>
   <link rel="manifest" href="manifest.json">
   <style>
     body { font-family: sans-serif; margin: 0; padding: 10px; background: #f0f0f0; touch-action: manipulation; color: #333; }
@@ -26,7 +26,6 @@
     /* テリトリーボタン */
     .territory-controls { width: 100%; display: flex; justify-content: space-between; gap: 10px; margin-bottom: 15px; }
     .btn-territory { flex: 1; height: 100px; font-size: 1.2rem; font-weight: bold; border: 2px solid #bdbdbd; border-radius: 10px; background: #e0e0e0; color: #757575; cursor: pointer; transition: 0.1s; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-    .btn-territory span { font-size: 0.85rem; font-weight: normal; margin-top: 5px; }
     .btn-territory.active-l { background: #1976d2; border-color: #0d47a1; color: white; box-shadow: inset 0 0 10px rgba(0,0,0,0.3); }
     .btn-territory.active-r { background: #d32f2f; border-color: #b71c1c; color: white; box-shadow: inset 0 0 10px rgba(0,0,0,0.3); }
 
@@ -67,7 +66,7 @@
 <body>
 
   <!-- 共通ヘッダー -->
-  <h1><span id="appTitle">🏉 テリトリー率 v0.8</span><span class="clock-display" id="clockDisplay"></span></h1>
+  <h1><span id="appTitle">🏉 テリトリー率 v1.0</span><span class="clock-display" id="clockDisplay"></span></h1>
 
   <!-- メイン画面 -->
   <div id="mainView" class="view-container active-view">
@@ -90,13 +89,13 @@
       </div>
     </div>
 
-    <!-- 手動テリトリーボタン -->
+    <!-- 手動テリトリーボタン (チーム名を非表示にしスッキリ化) -->
     <div class="territory-controls">
       <button id="btnTerritoryL" class="btn-territory" onclick="toggleTerritory('L')">
-        ◁ 左サイド<br><span id="lblBtnL">シラエビ</span>
+        ◁ 左サイド
       </button>
       <button id="btnTerritoryR" class="btn-territory" onclick="toggleTerritory('R')">
-        ▷ 右サイド<br><span id="lblBtnR">ズワイガニ</span>
+        ▷ 右サイド
       </button>
     </div>
 
@@ -203,15 +202,16 @@
     let globalTimer = null;
 
     function loadData() {
-      const saved = localStorage.getItem('rugby_data_v8');
+      // 正式版v1.0用のストレージキーに変更
+      const saved = localStorage.getItem('rugby_data_v1');
       if (saved) {
         matchData = JSON.parse(saved);
         updateUIFromData();
       }
-      updateTimerDisplay(); // 初回ロード時にタイマー表示を更新
+      updateTimerDisplay();
     }
     function saveData() {
-      localStorage.setItem('rugby_data_v8', JSON.stringify(matchData));
+      localStorage.setItem('rugby_data_v1', JSON.stringify(matchData));
     }
 
     // --- 3. UIと設定連動 ---
@@ -227,13 +227,11 @@
       tbody.appendChild(tr);
     });
 
-    // ラジオボタンの切り替え（他方をチェックするとタイマー停止）
     document.querySelectorAll('input[name="halfRadio"]').forEach(radio => {
       radio.addEventListener('change', (e) => {
         currentHalf = e.target.value;
         currentState = 'P';
         
-        // ハーフが切り替わったら記録（カウント）を停止する
         if (globalTimer) {
           clearInterval(globalTimer);
           globalTimer = null;
@@ -272,9 +270,6 @@
       document.getElementById('inputLeft').value = leftName;
       document.getElementById('inputRight').value = rightName;
       
-      document.getElementById('lblBtnL').textContent = leftName;
-      document.getElementById('lblBtnR').textContent = rightName;
-      
       document.getElementById('thLeft').textContent = `${leftName} (左)`;
       document.getElementById('thRight').textContent = `${rightName} (右)`;
     }
@@ -299,7 +294,6 @@
       }
       updateTerritoryBtnStyle();
 
-      // 最初のサイドボタンを押すとカウント開始
       if (!globalTimer) {
         globalTimer = setInterval(tickSecond, 1000);
       }
@@ -315,7 +309,7 @@
     function tickSecond() {
       matchData.ticks[currentHalf].push(currentState);
       saveData();
-      updateTimerDisplay(); // 1秒ごとに画面のタイマーを更新
+      updateTimerDisplay(); 
     }
 
     // --- 5. イベント記録ロジック ---
@@ -366,7 +360,7 @@
     }
 
     function goToMain() {
-      document.getElementById('appTitle').textContent = '🏉 テリトリー率 v0.8';
+      document.getElementById('appTitle').textContent = '🏉 テリトリー率 v1.0';
       document.getElementById('summaryView').classList.remove('active-view');
       document.getElementById('mainView').classList.add('active-view');
     }
@@ -517,7 +511,7 @@
     function resetAll() {
       if(confirm('すべての記録データを削除して初期状態に戻しますか？')) {
         if (globalTimer) clearInterval(globalTimer);
-        localStorage.removeItem('rugby_data_v8');
+        localStorage.removeItem('rugby_data_v1');
         location.reload(); 
       }
     }
