@@ -89,7 +89,7 @@
       </div>
     </div>
 
-    <!-- 手動テリトリーボタン (チーム名を非表示にしスッキリ化) -->
+    <!-- 手動テリトリーボタン -->
     <div class="territory-controls">
       <button id="btnTerritoryL" class="btn-territory" onclick="toggleTerritory('L')">
         ◁ 左サイド
@@ -112,12 +112,6 @@
         <!-- JSで生成 -->
       </tbody>
     </table>
-
-    <!-- リセットを促す注意書き -->
-    <div class="warning-box">
-      <strong>※注意！</strong><br>
-      試合が終了し、データ集計しましたら、CSV書出しにてデータを別途保存後、リセットボタンを押して各種データをクリアして下さい。
-    </div>
 
     <button class="btn-action btn-primary" onclick="goToSummary()">試合終了後、データ集計へ</button>
   </div>
@@ -165,6 +159,12 @@
       </table>
     </div>
 
+    <!-- リセットを促す注意書き -->
+    <div class="warning-box">
+      <strong>※注意！</strong><br>
+      CSV書出しにてデータを別途保存後、リセットボタンを押して各種データをクリアして下さい。
+    </div>
+
     <!-- 下部横並びボタン -->
     <div class="bottom-buttons">
       <button class="btn-action" onclick="goToMain()">戻る</button>
@@ -202,7 +202,6 @@
     let globalTimer = null;
 
     function loadData() {
-      // 正式版v1.0用のストレージキーに変更
       const saved = localStorage.getItem('rugby_data_v1');
       if (saved) {
         matchData = JSON.parse(saved);
@@ -353,6 +352,15 @@
 
     // --- 6. 集計画面への遷移と計算 ---
     function goToSummary() {
+      // 集計画面へ移動する際に、稼働中のタイマーを確実に停止させる
+      if (globalTimer) {
+        clearInterval(globalTimer);
+        globalTimer = null;
+      }
+      currentState = 'P'; // ボタンの状態もリセット
+      updateTerritoryBtnStyle();
+      saveData();
+
       document.getElementById('appTitle').textContent = '🏉 データ集計';
       document.getElementById('mainView').classList.remove('active-view');
       document.getElementById('summaryView').classList.add('active-view');
