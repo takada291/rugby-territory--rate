@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>🏉 テリトリー率 v0.7</title>
+  <title>🏉 テリトリー率 v0.8</title>
   <link rel="manifest" href="manifest.json">
-  
   <style>
     body { font-family: sans-serif; margin: 0; padding: 10px; background: #f0f0f0; touch-action: manipulation; color: #333; }
     h1 { font-size: 1.1rem; margin: 0 0 10px; text-align: center; }
@@ -14,10 +13,12 @@
     .view-container { display: none; flex-direction: column; align-items: center; width: 100%; max-width: 500px; margin: 0 auto; }
     .active-view { display: flex; }
 
-    /* 設定エリア（ハーフ選択・チーム名） */
+    /* 設定エリア（ハーフ選択・チーム名・タイマー） */
     .config-panel { width: 100%; background: white; padding: 10px; border-radius: 8px; margin-bottom: 15px; box-sizing: border-box; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    .radio-group { display: flex; gap: 20px; justify-content: center; margin-bottom: 10px; font-weight: bold; }
+    .radio-group { display: flex; gap: 15px; justify-content: center; margin-bottom: 10px; font-weight: bold; align-items: center; }
     .radio-group label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+    .timer-text { font-family: monospace; font-size: 1.1rem; color: #1976d2; margin-left: 2px; }
+    
     .team-inputs { display: flex; justify-content: space-between; gap: 10px; width: 100%; }
     .team-input-box { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 0.85rem; color: #555; align-items: center; }
     .team-input-box input { width: 100%; box-sizing: border-box; padding: 8px; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px; margin-top: 4px; font-weight: bold; text-align: center; }
@@ -44,6 +45,10 @@
     .btn-primary { background: #1976d2; }
     .btn-danger { background: #757575; }
 
+    /* 注意書きパネル */
+    .warning-box { width: 100%; background: #ffebee; color: #c62828; padding: 12px; border-radius: 8px; font-size: 0.85rem; line-height: 1.4; margin-bottom: 15px; border: 1px solid #ef9a9a; box-sizing: border-box; }
+    .warning-box strong { font-size: 0.95rem; }
+
     /* 集計画面用テーブル */
     .summary-section { width: 100%; background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; box-sizing: border-box; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     .summary-title { font-size: 1rem; font-weight: bold; border-bottom: 2px solid #eee; padding-bottom: 5px; margin-bottom: 10px; display: flex; align-items: center; gap: 5px; }
@@ -62,7 +67,7 @@
 <body>
 
   <!-- 共通ヘッダー -->
-  <h1><span id="appTitle">🏉 テリトリー率 v0.7</span><span class="clock-display" id="clockDisplay"></span></h1>
+  <h1><span id="appTitle">🏉 テリトリー率 v0.8</span><span class="clock-display" id="clockDisplay"></span></h1>
 
   <!-- メイン画面 -->
   <div id="mainView" class="view-container active-view">
@@ -70,8 +75,8 @@
     <!-- 設定パネル -->
     <div class="config-panel">
       <div class="radio-group">
-        <label><input type="radio" name="halfRadio" value="first" checked> 前半</label>
-        <label><input type="radio" name="halfRadio" value="second"> 後半</label>
+        <label><input type="radio" name="halfRadio" value="first" checked> 前半 <span id="timerFirst" class="timer-text">00:00</span></label>
+        <label><input type="radio" name="halfRadio" value="second"> 後半 <span id="timerSecond" class="timer-text">00:00</span></label>
       </div>
       <div class="team-inputs">
         <div class="team-input-box">
@@ -95,7 +100,7 @@
       </button>
     </div>
 
-    <!-- イベントテーブル（スリム化） -->
+    <!-- イベントテーブル -->
     <table class="event-table">
       <thead>
         <tr>
@@ -108,6 +113,12 @@
         <!-- JSで生成 -->
       </tbody>
     </table>
+
+    <!-- リセットを促す注意書き -->
+    <div class="warning-box">
+      <strong>※注意！</strong><br>
+      試合が終了し、データ集計しましたら、CSV書出しにてデータを別途保存後、リセットボタンを押して各種データをクリアして下さい。
+    </div>
 
     <button class="btn-action btn-primary" onclick="goToSummary()">試合終了後、データ集計へ</button>
   </div>
@@ -135,7 +146,7 @@
       </table>
     </div>
 
-    <!-- テリトリー集計（3分割対応） -->
+    <!-- テリトリー集計 -->
     <div class="summary-section">
       <div class="summary-title">◎ テリトリー率</div>
       <table class="summary-table">
@@ -192,18 +203,18 @@
     let globalTimer = null;
 
     function loadData() {
-      const saved = localStorage.getItem('rugby_data_v7');
+      const saved = localStorage.getItem('rugby_data_v8');
       if (saved) {
         matchData = JSON.parse(saved);
         updateUIFromData();
       }
+      updateTimerDisplay(); // 初回ロード時にタイマー表示を更新
     }
     function saveData() {
-      localStorage.setItem('rugby_data_v7', JSON.stringify(matchData));
+      localStorage.setItem('rugby_data_v8', JSON.stringify(matchData));
     }
 
     // --- 3. UIと設定連動 ---
-    // スクラム、ラインアウトを削除
     const evTypes = ['トライ', 'コンバージョンG', 'ペナルティG', 'ドロップG'];
     const tbody = document.getElementById('eventTbody');
     evTypes.forEach((type, idx) => {
@@ -216,10 +227,18 @@
       tbody.appendChild(tr);
     });
 
+    // ラジオボタンの切り替え（他方をチェックするとタイマー停止）
     document.querySelectorAll('input[name="halfRadio"]').forEach(radio => {
       radio.addEventListener('change', (e) => {
         currentHalf = e.target.value;
         currentState = 'P';
+        
+        // ハーフが切り替わったら記録（カウント）を停止する
+        if (globalTimer) {
+          clearInterval(globalTimer);
+          globalTimer = null;
+        }
+        
         updateTerritoryBtnStyle();
         updateUIFromData();
       });
@@ -243,6 +262,7 @@
       document.querySelector(`input[name="halfRadio"][value="${currentHalf}"]`).checked = true;
       updateLabelsOnly();
       renderEventCounts();
+      updateTimerDisplay();
     }
 
     function updateLabelsOnly() {
@@ -259,7 +279,18 @@
       document.getElementById('thRight').textContent = `${rightName} (右)`;
     }
 
-    // --- 4. テリトリー手動記録ロジック ---
+    // --- 4. テリトリー手動記録＆ストップウォッチロジック ---
+    function formatTime(seconds) {
+      const m = String(Math.floor(seconds / 60)).padStart(2, '0');
+      const s = String(seconds % 60).padStart(2, '0');
+      return `${m}:${s}`;
+    }
+
+    function updateTimerDisplay() {
+      document.getElementById('timerFirst').textContent = formatTime(matchData.ticks.first.length);
+      document.getElementById('timerSecond').textContent = formatTime(matchData.ticks.second.length);
+    }
+
     function toggleTerritory(side) {
       if (currentState === side) {
         currentState = 'P'; 
@@ -268,6 +299,7 @@
       }
       updateTerritoryBtnStyle();
 
+      // 最初のサイドボタンを押すとカウント開始
       if (!globalTimer) {
         globalTimer = setInterval(tickSecond, 1000);
       }
@@ -283,6 +315,7 @@
     function tickSecond() {
       matchData.ticks[currentHalf].push(currentState);
       saveData();
+      updateTimerDisplay(); // 1秒ごとに画面のタイマーを更新
     }
 
     // --- 5. イベント記録ロジック ---
@@ -333,7 +366,7 @@
     }
 
     function goToMain() {
-      document.getElementById('appTitle').textContent = '🏉 テリトリー率 v0.7';
+      document.getElementById('appTitle').textContent = '🏉 テリトリー率 v0.8';
       document.getElementById('summaryView').classList.remove('active-view');
       document.getElementById('mainView').classList.add('active-view');
     }
@@ -350,9 +383,7 @@
       return score;
     }
 
-    // 配列を3分割して割合を計算する関数
     function calcTerritorySplit(halfStr, partIndex) {
-      // partIndex: 0(前), 1(中), 2(後)
       let ticks = matchData.ticks[halfStr];
       let total = ticks.length;
       if (total === 0) return { L: 0, P: 0, R: 0 };
@@ -374,7 +405,6 @@
       const tA = matchData.teams.A;
       const tB = matchData.teams.B;
       
-      // スコア表示
       document.getElementById('scoreTeamA').textContent = tA;
       document.getElementById('scoreTeamB').textContent = tB;
       
@@ -388,13 +418,11 @@
       document.getElementById('scA_tot').textContent = (scA1 + scA2) + "点";
       document.getElementById('scB_tot').textContent = (scB1 + scB2) + "点";
 
-      // テリトリー率（3分割）表示
       const trTbody = document.getElementById('territoryTbody');
       trTbody.innerHTML = '';
       
       const parts = ['前', '中', '後'];
       
-      // 前半の生成
       parts.forEach((p, i) => {
         const tr = calcTerritorySplit('first', i);
         trTbody.innerHTML += `
@@ -409,7 +437,6 @@
         `;
       });
       
-      // 後半の生成
       parts.forEach((p, i) => {
         const tr = calcTerritorySplit('second', i);
         trTbody.innerHTML += `
@@ -466,7 +493,6 @@
 
       const blob = new Blob([csv], { type: 'text/csv' });
       
-      // 秒単位までのタイムスタンプを生成
       const now = new Date();
       const pad = (num) => String(num).padStart(2, '0');
       const ts = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
@@ -490,8 +516,8 @@
 
     function resetAll() {
       if(confirm('すべての記録データを削除して初期状態に戻しますか？')) {
-        clearInterval(globalTimer);
-        localStorage.removeItem('rugby_data_v7');
+        if (globalTimer) clearInterval(globalTimer);
+        localStorage.removeItem('rugby_data_v8');
         location.reload(); 
       }
     }
