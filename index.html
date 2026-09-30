@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>🏉 テリトリー率 v1.1</title>
+  <title>🏉 テリトリー率 v1.2</title>
   <link rel="manifest" href="manifest.json">
   
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-8PJYQKC5F5"></script>
@@ -56,7 +56,7 @@
     .btn-danger { background: #757575; }
 
     /* 注意書きパネル */
-    .warning-box { width: 100%; background: #ffebee; color: #c62828; padding: 12px; border-radius: 8px; font-size: 0.85rem; line-height: 1.4; margin-bottom: 15px; border: 1px solid #ef9a9a; box-sizing: border-box; }
+    .warning-box { width: 100%; background: #ffebee; color: #c62828; padding: 12px; border-radius: 8px; font-size: 0.9rem; line-height: 1.4; margin-bottom: 15px; border: 1px solid #ef9a9a; box-sizing: border-box; text-align: center; }
     .warning-box strong { font-size: 0.95rem; }
 
     /* 集計画面用テーブル */
@@ -77,7 +77,7 @@
 <body>
 
   <!-- 共通ヘッダー -->
-  <h1><span id="appTitle">🏉 テリトリー率 v1.1</span><span class="clock-display" id="clockDisplay"></span></h1>
+  <h1><span id="appTitle">🏉 テリトリー率 v1.2</span><span class="clock-display" id="clockDisplay"></span></h1>
 
   <!-- メイン画面 -->
   <div id="mainView" class="view-container active-view">
@@ -142,10 +142,8 @@
             <th id="scoreTeamB">チームB</th>
           </tr>
         </thead>
-        <tbody>
-          <tr><td>前半</td><td id="scA_1">0点</td><td id="scB_1">0点</td></tr>
-          <tr><td>後半</td><td id="scA_2">0点</td><td id="scB_2">0点</td></tr>
-          <tr style="font-weight:bold; background:#f9f9f9;"><td>合計</td><td id="scA_tot">0点</td><td id="scB_tot">0点</td></tr>
+        <tbody id="scoreTbody">
+          <!-- JSで生成 -->
         </tbody>
       </table>
     </div>
@@ -170,10 +168,9 @@
       </table>
     </div>
 
-    <!-- リセットを促す注意書き -->
+    <!-- リセットを促す注意書き（1行化） -->
     <div class="warning-box">
-      <strong>※注意！</strong><br>
-      CSV書出しにてデータを別途保存後、リセットボタンを押して各種データをクリアして下さい。
+      <strong>※注意！</strong> CSV書出し後、リセットボタンを押してください。
     </div>
 
     <!-- 下部横並びボタン -->
@@ -322,14 +319,23 @@
       updateTimerDisplay(); 
     }
 
-    // --- 5. イベント記録ロジック ---
+    // --- 5. イベント記録ロジック（時間帯振り分け対応） ---
     function modEvent(side, type, delta) {
       const teamName = side === 'L' ? 
         (currentHalf === 'first' ? matchData.teams.A : matchData.teams.B) : 
         (currentHalf === 'first' ? matchData.teams.B : matchData.teams.A);
 
       if (delta > 0) {
-        matchData.events.push({ id: Date.now(), half: currentHalf, side: side, team: teamName, type: type });
+        // 現在のテリトリー記録数を保存し、後で前・後に振り分けられるようにする
+        const currentTick = matchData.ticks[currentHalf].length;
+        matchData.events.push({ 
+          id: Date.now(), 
+          half: currentHalf, 
+          side: side, 
+          team: teamName, 
+          type: type,
+          tickIndex: currentTick
+        });
       } else {
         for (let i = matchData.events.length - 1; i >= 0; i--) {
           if (matchData.events[i].half === currentHalf && matchData.events[i].side === side && matchData.events[i].type === type) {
@@ -363,12 +369,11 @@
 
     // --- 6. 集計画面への遷移と計算 ---
     function goToSummary() {
-      // 集計画面へ移動する際に、稼働中のタイマーを確実に停止させる
       if (globalTimer) {
         clearInterval(globalTimer);
         globalTimer = null;
       }
-      currentState = 'P'; // ボタンの状態もリセット
+      currentState = 'P'; 
       updateTerritoryBtnStyle();
       saveData();
 
@@ -379,14 +384,41 @@
     }
 
     function goToMain() {
-      document.getElementById('appTitle').textContent = '🏉 テリトリー率 v1.0';
+      document.getElementById('appTitle').textContent = '🏉 テリトリー率 v1.1';
       document.getElementById('summaryView').classList.remove('active-view');
       document.getElementById('mainView').classList.add('active-view');
     }
 
-    function calcScore(teamName, halfStr) {
+    // 指定したチーム・ハーフ・時間帯（前/後）のイベントを抽出
+    function getEventsByPart(teamName, halfStr, part) {
+      let totalTicks = matchData.ticks[halfStr].length;
+      let midpoint = Math.floor(totalTicks / 2);
+
+      return matchData.events.filter(e => {
+        if (e.team !== teamName || e.half !== halfStr) return false;
+        
+        let tIndex = e.tickIndex !== undefined ? e.tickIndex : 0; // 古いデータ互換用
+
+        if (part === 0) { // 前
+          return tIndex < midpoint || totalTicks === 0;
+        } else if (part === 1) { // 後
+          return tIndex >= midpoint && totalTicks > 0;
+        }
+        return true; // 平均・全体用
+      });
+    }
+
+    // スコア計算（前・後・全体を判定）
+    function calcScore(teamName, halfStr, part) {
+      // part: 0(前), 1(後), 2(合計/全体)
+      let evs = [];
+      if (halfStr === 'all') {
+        evs = matchData.events.filter(e => e.team === teamName);
+      } else {
+        evs = getEventsByPart(teamName, halfStr, part);
+      }
+
       let score = 0;
-      const evs = matchData.events.filter(e => e.team === teamName && (halfStr === 'all' || e.half === halfStr));
       evs.forEach(e => {
         if(e.type === 'トライ') score += 5;
         if(e.type === 'コンバージョンG') score += 2;
@@ -396,16 +428,25 @@
       return score;
     }
 
+    // テリトリー率計算（前・後・平均を判定）
     function calcTerritorySplit(halfStr, partIndex) {
+      // partIndex: 0(前), 1(後), 2(平均)
       let ticks = matchData.ticks[halfStr];
       let total = ticks.length;
       if (total === 0) return { L: 0, P: 0, R: 0 };
 
-      let size = Math.floor(total / 3);
-      let start = partIndex * size;
-      let end = (partIndex === 2) ? total : start + size;
+      let subTicks = [];
+      if (partIndex === 2) {
+        subTicks = ticks;
+      } else {
+        let midpoint = Math.floor(total / 2);
+        if (partIndex === 0) {
+          subTicks = ticks.slice(0, midpoint);
+        } else if (partIndex === 1) {
+          subTicks = ticks.slice(midpoint);
+        }
+      }
       
-      let subTicks = ticks.slice(start, end);
       let l=0, p=0, r=0;
       subTicks.forEach(t => { if(t==='L') l++; else if(t==='R') r++; else p++; });
       let subTot = subTicks.length;
@@ -421,26 +462,31 @@
       document.getElementById('scoreTeamA').textContent = tA;
       document.getElementById('scoreTeamB').textContent = tB;
       
-      const scA1 = calcScore(tA, 'first'), scB1 = calcScore(tB, 'first');
-      const scA2 = calcScore(tA, 'second'), scB2 = calcScore(tB, 'second');
-      
-      document.getElementById('scA_1').textContent = scA1 + "点";
-      document.getElementById('scB_1').textContent = scB1 + "点";
-      document.getElementById('scA_2').textContent = scA2 + "点";
-      document.getElementById('scB_2').textContent = scB2 + "点";
-      document.getElementById('scA_tot').textContent = (scA1 + scA2) + "点";
-      document.getElementById('scB_tot').textContent = (scB1 + scB2) + "点";
+      // スコア表示（JSで動的生成）
+      const scTbody = document.getElementById('scoreTbody');
+      scTbody.innerHTML = `
+        <tr><td>前半(前)</td><td>${calcScore(tA, 'first', 0)}点</td><td>${calcScore(tB, 'first', 0)}点</td></tr>
+        <tr><td>前半(後)</td><td>${calcScore(tA, 'first', 1)}点</td><td>${calcScore(tB, 'first', 1)}点</td></tr>
+        <tr><td>後半(前)</td><td>${calcScore(tA, 'second', 0)}点</td><td>${calcScore(tB, 'second', 0)}点</td></tr>
+        <tr><td>後半(後)</td><td>${calcScore(tA, 'second', 1)}点</td><td>${calcScore(tB, 'second', 1)}点</td></tr>
+        <tr style="font-weight:bold; background:#f9f9f9;"><td>合計</td><td>${calcScore(tA, 'all', 2)}点</td><td>${calcScore(tB, 'all', 2)}点</td></tr>
+      `;
 
+      // テリトリー率表示
       const trTbody = document.getElementById('territoryTbody');
       trTbody.innerHTML = '';
       
-      const parts = ['前', '中', '後'];
+      const parts = [
+        {name: '前', idx: 0}, 
+        {name: '後', idx: 1}, 
+        {name: '平均', idx: 2}
+      ];
       
-      parts.forEach((p, i) => {
-        const tr = calcTerritorySplit('first', i);
+      parts.forEach(p => {
+        const tr = calcTerritorySplit('first', p.idx);
         trTbody.innerHTML += `
           <tr>
-            <td>前半(${p})</td>
+            <td>前半(${p.name})</td>
             <td class="t-rate-l">${tr.L}%</td>
             <td class="t-rate-p">${tr.P}%</td>
             <td class="t-rate-r">${tr.R}%</td>
@@ -450,11 +496,11 @@
         `;
       });
       
-      parts.forEach((p, i) => {
-        const tr = calcTerritorySplit('second', i);
+      parts.forEach(p => {
+        const tr = calcTerritorySplit('second', p.idx);
         trTbody.innerHTML += `
           <tr>
-            <td>後半(${p})</td>
+            <td>後半(${p.name})</td>
             <td class="t-rate-l">${tr.L}%</td>
             <td class="t-rate-p">${tr.P}%</td>
             <td class="t-rate-r">${tr.R}%</td>
@@ -466,43 +512,56 @@
     }
 
     // --- 7. CSV出力とリセット ---
+    function getEvCountsByPart(teamName, halfStr, part) {
+      let cnts = evTypes.map(() => 0);
+      let evs = getEventsByPart(teamName, halfStr, part);
+      evs.forEach(e => {
+        const idx = evTypes.indexOf(e.type);
+        if(idx !== -1) cnts[idx]++;
+      });
+      return cnts.join(',');
+    }
+
     function exportCSV() {
       const tA = matchData.teams.A;
       const tB = matchData.teams.B;
       let csv = "\uFEFF"; 
       
+      // スコア集計 CSV
       csv += "【スコア集計】\n";
-      csv += `チーム,前半,後半,合計\n`;
-      csv += `${tA},${calcScore(tA,'first')},${calcScore(tA,'second')},${calcScore(tA,'all')}\n`;
-      csv += `${tB},${calcScore(tB,'first')},${calcScore(tB,'second')},${calcScore(tB,'all')}\n\n`;
+      csv += `チーム,前半(前),前半(後),後半(前),後半(後),合計\n`;
+      csv += `${tA},${calcScore(tA,'first',0)},${calcScore(tA,'first',1)},${calcScore(tA,'second',0)},${calcScore(tA,'second',1)},${calcScore(tA,'all',2)}\n`;
+      csv += `${tB},${calcScore(tB,'first',0)},${calcScore(tB,'first',1)},${calcScore(tB,'second',0)},${calcScore(tB,'second',1)},${calcScore(tB,'all',2)}\n\n`;
 
+      // テリトリー率 CSV
       csv += "【テリトリー率】\n";
       csv += `ハーフ(分割),左サイド(%),中断(%),右サイド(%),(左チーム),(右チーム)\n`;
       
-      const parts = ['前', '中', '後'];
-      parts.forEach((p, i) => {
-        const tr = calcTerritorySplit('first', i);
-        csv += `前半(${p}),${tr.L},${tr.P},${tr.R},${tA},${tB}\n`;
+      const parts = [ {name: '前', idx: 0}, {name: '後', idx: 1}, {name: '平均', idx: 2} ];
+      parts.forEach(p => {
+        const tr = calcTerritorySplit('first', p.idx);
+        csv += `前半(${p.name}),${tr.L},${tr.P},${tr.R},${tA},${tB}\n`;
       });
-      parts.forEach((p, i) => {
-        const tr = calcTerritorySplit('second', i);
-        csv += `後半(${p}),${tr.L},${tr.P},${tr.R},${tB},${tA}\n`;
+      parts.forEach(p => {
+        const tr = calcTerritorySplit('second', p.idx);
+        csv += `後半(${p.name}),${tr.L},${tr.P},${tr.R},${tB},${tA}\n`;
       });
       csv += `\n`;
 
-      csv += "【イベント回数 (チーム別合計)】\n";
-      csv += `チーム,${evTypes.join(',')}\n`;
+      // イベント回数 CSV
+      csv += "【イベント回数】\n";
+      csv += `チーム,ハーフ(分割),${evTypes.join(',')}\n`;
       
-      function getEvCounts(teamName) {
-        let cnts = evTypes.map(() => 0);
-        matchData.events.filter(e => e.team === teamName).forEach(e => {
-          const idx = evTypes.indexOf(e.type);
-          if(idx !== -1) cnts[idx]++;
+      const halves = [ {h: 'first', n: '前半'}, {h: 'second', n: '後半'} ];
+      const subParts = [ {p: 0, n: '前'}, {p: 1, n: '後'} ];
+      
+      [tA, tB].forEach(team => {
+        halves.forEach(half => {
+          subParts.forEach(sub => {
+            csv += `${team},${half.n}(${sub.n}),${getEvCountsByPart(team, half.h, sub.p)}\n`;
+          });
         });
-        return cnts.join(',');
-      }
-      csv += `${tA},${getEvCounts(tA)}\n`;
-      csv += `${tB},${getEvCounts(tB)}\n`;
+      });
 
       const blob = new Blob([csv], { type: 'text/csv' });
       
